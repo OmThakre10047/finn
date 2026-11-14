@@ -1,7 +1,10 @@
+import json
 import re
 import time
 
 from curl_cffi import requests as cr
+
+from . import db
 
 BASE = "https://www.screener.in"
 UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
@@ -9,27 +12,82 @@ UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like 
 _slug_cache: dict[str, str] = {}
 
 
-def _slug(ticker: str) -> str:
+def _session() -> cr.Session:
+    return cr.Session(impersonate="chrome124")
+
+
+def _search(q: str) -> list[dict]:
+    try:
+        r = _session().get(f"{BASE}/api/company/search/?q={q}", headers={"User-Agent": UA}, timeout=20)
+        if r.status_code != 200:
+            return []
+        return [h for h in r.json() if "wound up" not in h.get("name", "").lower()]
+    except Exception:
+        return []
+
+
+def _company_name_from_nse(ticker: str) -> str | None:
+    cached = db.kv_get(f"nse_name:{ticker}")
+    if cached:
+        return cached
+    from .ingest import load_snapshot
+
+    name = None
+    for r in load_snapshot():
+        if r["ticker"] == ticker and r["raw"].get("sm_name"):
+            name = r["raw"]["sm_name"]
+            break
+    if name:
+        db.kv_set(f"nse_name:{ticker}", name)
+    return name
+
+
+def resolve_slug(ticker: str) -> str:
+    """direct slug -> search by symbol -> search by NSE company name -> prefix. Cached in kv."""
     if ticker in _slug_cache:
         return _slug_cache[ticker]
-    s = cr.Session(impersonate="chrome124")
-    r = s.get(f"{BASE}/company/{ticker}/consolidated/", headers={"User-Agent": UA}, timeout=30)
-    if r.status_code == 200:
-        _slug_cache[ticker] = ticker
-        return ticker
-    r2 = s.get(f"{BASE}/company/{ticker}/", headers={"User-Agent": UA}, timeout=30)
-    if r2.status_code == 200:
-        _slug_cache[ticker] = ticker
-        return ticker
-    raise RuntimeError(f"screener page not found for {ticker} (HTTP {r.status_code}/{r2.status_code})")
+    cached = db.kv_get(f"slug:{ticker}")
+    if cached:
+        _slug_cache[ticker] = cached
+        return cached
+    s = _session()
+    for path in (f"/company/{ticker}/consolidated/", f"/company/{ticker}/"):
+        try:
+            r = s.get(f"{BASE}{path}", headers={"User-Agent": UA}, timeout=30)
+            if r.status_code == 200:
+                db.kv_set(f"slug:{ticker}", ticker)
+                _slug_cache[ticker] = ticker
+                return ticker
+        except Exception:
+            continue
+    queries = [ticker, _company_name_from_nse(ticker) or "", ticker[:5]]
+    for q in queries:
+        if not q:
+            continue
+        hits = _search(q)
+        if hits:
+            url = hits[0]["url"]
+            m = re.search(r"/company/([^/]+)/", url)
+            if m:
+                slug = m.group(1)
+                db.kv_set(f"slug:{ticker}", slug)
+                _slug_cache[ticker] = slug
+                return slug
+    raise RuntimeError(f"screener slug not found for {ticker}")
+
+
+def _slug(ticker: str) -> str:
+    return resolve_slug(ticker)
 
 
 def fetch_company_html(ticker: str) -> str:
-    slug = _slug(ticker)
-    s = cr.Session(impersonate="chrome124")
+    slug = resolve_slug(ticker)
+    s = _session()
     r = s.get(f"{BASE}/company/{slug}/consolidated/", headers={"User-Agent": UA}, timeout=30)
     if r.status_code != 200:
-        raise RuntimeError(f"screener HTTP {r.status_code} for {ticker}")
+        r = s.get(f"{BASE}/company/{slug}/", headers={"User-Agent": UA}, timeout=30)
+    if r.status_code != 200:
+        raise RuntimeError(f"screener HTTP {r.status_code} for {ticker} (slug {slug})")
     return r.text
 
 

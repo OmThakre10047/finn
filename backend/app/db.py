@@ -113,6 +113,10 @@ CREATE TABLE IF NOT EXISTS source_state (
     last_ok_at TEXT,
     last_error TEXT
 );
+CREATE TABLE IF NOT EXISTS kv (
+    k TEXT PRIMARY KEY,
+    v TEXT
+);
 """
 
 
@@ -157,3 +161,14 @@ def set_source_state(source: str, mode: str, error: str | None = None) -> None:
                  last_error = excluded.last_error""",
             (source, mode, mode, error),
         )
+
+
+def kv_get(k: str) -> str | None:
+    with get_db() as db:
+        row = db.execute("SELECT v FROM kv WHERE k = ?", (k,)).fetchone()
+        return row["v"] if row else None
+
+
+def kv_set(k: str, v: str) -> None:
+    with get_db() as db:
+        db.execute("INSERT OR REPLACE INTO kv (k, v) VALUES (?, ?)", (k, v))

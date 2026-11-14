@@ -5,7 +5,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from app import screener
 from app.enrich_results import extract_pdf_text, select_results_pages, verify_rows, sanity_check
-from app.research import _doc_pages, _select_ar_pages, _extract_calls, _validate_citations, _numeric_verdicts, CALL_CHAR_CAP
+from app.research import _doc_pages, _select_ar_pages, _ar_payloads, _split_into_payloads, _validate_citations, _numeric_verdicts, CALL_CHAR_CAP
 from app.config import BACKEND_DIR
 
 PASS = []
@@ -25,14 +25,15 @@ print("\n-- 3: AR page index + call splitting --")
 ar = docs["annual_reports"][0]
 pages = _doc_pages("IRCTC", ar["url"])
 ok("3: AR downloaded+extracted", len(pages) > 50, f"{len(pages)} pages")
-sel = _select_ar_pages(pages)
-ok("3: AR heading selection narrows", 10 <= len(sel) <= len(pages) // 2, f"selected {len(sel)}/{len(pages)} pages")
-payloads = _extract_calls(pages, sel)
-ok("3: AR payloads <=2 and under cap", 1 <= len(payloads) <= 2 and all(len(p) <= CALL_CHAR_CAP for p in payloads),
-   f"{len(payloads)} payloads, max {max(len(p) for p in payloads)} chars")
+sel, seclog = _select_ar_pages(pages)
+ok("3: AR heading selection narrows (+1 page/section)", 10 <= len(sel) <= len(pages) // 2 + 20, f"selected {len(sel)}/{len(pages)} pages, sections={seclog}")
+payloads, plog = _ar_payloads(pages)
+ok("3: AR payloads <=3 under cap, sections logged", 1 <= len(payloads) <= 3 and all(len(p) <= CALL_CHAR_CAP for p in payloads) and bool(plog),
+   f"{len(payloads)} payloads, max {max(len(p) for p in payloads)} chars, sections={plog}")
+always_ok = all(s in plog for s in ("auditor_report", "contingent_liabilities", "related_party") if s in seclog)
+ok("3: auditor/contingent/RPT always included", always_ok, f"log={plog}")
 cpage = _doc_pages("IRCTC", concalls[0]["url"])
-cp = list(range(len(cpage)))
-cpl = _extract_calls(cpage, cp)
+cpl = _split_into_payloads(cpage, list(range(len(cpage))), max_payloads=2)
 ok("3: transcript split logic", 1 <= len(cpl) <= 2 and all(len(p) <= CALL_CHAR_CAP for p in cpl),
    f"{len(cpl)} payloads from {len(cpage)} pages")
 

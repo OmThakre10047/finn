@@ -18,7 +18,7 @@ PRIORITY = {
 
 RULES: list[tuple[str, re.Pattern]] = [
     ("management_change", re.compile(r"change in director|change in kmp|chief financial officer|company secretary|appointment of .*(director|ceo|cfo|md|manager)|resignation|retirement of|cessation of", re.I)),
-    ("results", re.compile(r"financial result|audited result|unaudited result|declaration of financial|outcome of board meeting.*result|newspaper publication|newspaper advertisement|notice of board meeting", re.I)),
+    ("results", re.compile(r"financial result|audited result|unaudited result|declaration of financial|outcome of board meeting|notice of board meeting", re.I)),
     ("dividend", re.compile(r"dividend", re.I)),
     ("bonus_split", re.compile(r"bonus issue|stock split|sub-?division of|split of shares|fractional shares", re.I)),
     ("fund_raise", re.compile(r"fund rais|fundrais|preferential issue|preferential allot|qualified institutional|qip|rights issue|commercial paper|non-convertible debenture|ncds|issue of (shares|securities|debentures)|borrowing", re.I)),
@@ -33,7 +33,7 @@ RULES: list[tuple[str, re.Pattern]] = [
     ("earnings_call", re.compile(r"earnings call|con\.? ?call|conference call|transcript of|recording of|intimation of (earnings|concall)|schedule of analyst", re.I)),
     ("investor_meetings", re.compile(r"analysts?/institutional|investor meet|one[- ]on[- ]one|schedule of meet|participat\w* in the institution", re.I)),
     ("press_release", re.compile(r"bagging/receiving|order (win|receiv|secu)|press release|media release|contract|communique|partnership|mou", re.I)),
-    ("unclassified", re.compile(r"esop|share certificate|compliance (certificate|report)|regulation 7\(3\)|shareholding (pattern|for the period)|investor grievance|statement of deviation|listing fee|intimation under reg|certificate under reg|loss of share", re.I)),
+    ("unclassified", re.compile(r"esop|share certificate|compliance (certificate|report)|regulation 7\(3\)|shareholding (pattern|for the period)|investor grievance|statement of deviation|listing fee|intimation under reg|certificate under reg|loss of share|newspaper publication|newspaper advertisement", re.I)),
 ]
 
 AMBIGUOUS_HEADERS = {"general updates", "updates", "outcome of board meeting", "press release", "announcement", "other disclosures", "general"}

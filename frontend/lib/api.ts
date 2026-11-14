@@ -50,7 +50,8 @@ export type ResultsCard = {
   currency: string;
   rows: { label: string; current: number; qoq: number | null; yoy: number | null; page?: number }[];
   source: { doc: string; page: string };
-  confidence: "high" | "low" | "strong-recheck";
+  source_type?: "text" | "scanned";
+  confidence: string;
 };
 
 export type BioCard = {

@@ -37,6 +37,9 @@ SOURCES = ["nse_announcements", "bse_pdfs", "screener", "yfinance", "gemini", "t
 @app.on_event("startup")
 def startup() -> None:
     db.init_db()
+    from . import snapshot
+
+    snapshot.restore_if_empty()
     with get_db() as conn:
         if conn.execute("SELECT COUNT(*) c FROM portfolio").fetchone()["c"] == 0:
             conn.executemany(

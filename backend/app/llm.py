@@ -19,21 +19,25 @@ def _get_client():
     return _client
 
 
-def _cache_key(model: str, task: str, prompt: str) -> str:
-    return hashlib.sha256(f"{model}|{task}|{prompt.strip()}".encode()).hexdigest()
+def _cache_key(model: str, task: str, prompt: str, images: list[bytes] | None = None) -> str:
+    h = hashlib.sha256(f"{model}|{task}|{prompt.strip()}".encode())
+    for img in images or []:
+        h.update(b"|img|")
+        h.update(hashlib.sha256(img).digest())
+    return h.hexdigest()
 
 
 def configured() -> bool:
     return bool(GEMINI_API_KEY and (LLM_CHEAP or LLM_STRONG))
 
 
-def call(task: str, prompt: str, tier: str = "cheap", json_mode: bool = False, max_retries: int = 3) -> dict:
+def call(task: str, prompt: str, tier: str = "cheap", json_mode: bool = False, max_retries: int = 3, images: list[bytes] | None = None) -> dict:
     """Returns {"text": str, "cached": bool, "model": str, "ok": bool, "error": str|None}."""
     model = LLM_STRONG if tier == "strong" else LLM_CHEAP
     if not model or not GEMINI_API_KEY:
         return {"text": "", "cached": False, "model": model or "unset", "ok": False, "error": "llm_not_configured"}
 
-    key = _cache_key(model, task, prompt)
+    key = _cache_key(model, task, prompt, images)
     with db.get_db() as conn:
         row = conn.execute("SELECT response_json FROM llm_cache WHERE key_hash = ?", (key,)).fetchone()
         if row:
@@ -46,10 +50,17 @@ def call(task: str, prompt: str, tier: str = "cheap", json_mode: bool = False, m
     err = None
     for attempt in range(max_retries):
         try:
-            cfg = types.GenerateContentConfig(temperature=0.1)
+            cfg_kwargs = {"temperature": 0.1}
+            if tier == "strong":
+                cfg_kwargs["max_output_tokens"] = 24576
+                cfg_kwargs["thinking_config"] = types.ThinkingConfig(thinking_budget=1024)
             if json_mode:
-                cfg.response_mime_type = "application/json"
-            resp = _get_client().models.generate_content(model=model, contents=prompt, config=cfg)
+                cfg_kwargs["response_mime_type"] = "application/json"
+            cfg = types.GenerateContentConfig(**cfg_kwargs)
+            contents: list = [prompt]
+            for img in images or []:
+                contents.append(types.Part.from_bytes(data=img, mime_type="image/png"))
+            resp = _get_client().models.generate_content(model=model, contents=contents, config=cfg)
             text = resp.text or ""
             usage = getattr(resp, "usage_metadata", None)
             pt = getattr(usage, "prompt_token_count", 0) or 0
@@ -75,18 +86,49 @@ def call(task: str, prompt: str, tier: str = "cheap", json_mode: bool = False, m
     return {"text": "", "cached": False, "model": model, "ok": False, "error": err}
 
 
-def call_json(task: str, prompt: str, tier: str = "cheap"):
+def call_json(task: str, prompt: str, tier: str = "cheap", images: list[bytes] | None = None):
     """call() + JSON parse; returns parsed object or None."""
-    r = call(task, prompt, tier=tier, json_mode=True)
+    r = call(task, prompt, tier=tier, json_mode=True, images=images)
     if not r["ok"]:
         return None
+    return _parse_json_loose(r["text"])
+
+
+def _parse_json_loose(text: str):
+    """json.loads, then fence-stripped loads, then raw_decode (ignores trailing junk)."""
     try:
-        return json.loads(r["text"])
+        return json.loads(text)
     except json.JSONDecodeError:
-        t = r["text"].strip()
-        if t.startswith("```"):
-            t = t.strip("`").lstrip("json").strip()
-        try:
-            return json.loads(t)
-        except Exception:
-            return None
+        pass
+    t = text.strip()
+    if t.startswith("```"):
+        t = t.strip("`").lstrip("json").strip()
+    try:
+        return json.loads(t)
+    except json.JSONDecodeError:
+        pass
+    dec = json.JSONDecoder()
+    try:
+        obj, _ = dec.raw_decode(t.lstrip())
+        return obj
+    except json.JSONDecodeError:
+        return None
+
+
+def call_json_strict(task: str, prompt: str, tier: str = "cheap", max_retries: int = 2):
+    """Returns (data, error). error is None on success; on failure it names what broke
+    (HTTP error vs unparseable JSON, with a raw-response excerpt)."""
+    last_err = None
+    for _ in range(max_retries):
+        r = call(task, prompt, tier=tier, json_mode=True)
+        if not r["ok"]:
+            last_err = f"llm call failed: {r['error']}"
+            continue
+        data = _parse_json_loose(r["text"])
+        if data is not None:
+            return data, None
+        last_err = (
+            f"unparseable JSON (textlen={len(r['text'])}, "
+            f"head={r['text'][:120]!r}, tail={r['text'][-120:]!r})"
+        )
+    return None, last_err

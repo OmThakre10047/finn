@@ -1,5 +1,16 @@
 # PROGRESS
 
+## 2026-11-15 — Review-2 fixes 1-6 shipped; full chain run; snapshot enriched; costs ledger live
+- **Fix 1 (ticker resolution)**: `screener.resolve_slug()` — direct slug → search-by-symbol → search-by-`sm_name` (from NSE feed) → prefix; cached in new `kv` table. Verified: VARUNBEV→**VBL**, HAPPSTMNDS→direct, SUPREMEIND→direct.
+- **Fix 2 (synthesis robustness)**: split into two strong calls (sections; promise_tracker) via new `llm.call_json_strict` (max_output_tokens=24576, thinking_budget=1024, retries, and errors that name the failure — ETERNAL's root cause was a trailing ``` fence, now handled by `raw_decode`). ETERNAL: 8 sections + 11 tracker rows; VARUNBEV: 8 + 5.
+- **Fix 3 (get_status)**: status column checked FIRST — error rows return `{status:'error', error}` with real message; UI shows "Research failed" + message + Retry button (POST restarts from error).
+- **Fix 4 (AR section log)**: per-section page counts computed from pages actually kept in payloads. IRCTC AR 380p → 42 selected (6p/section × 7 sections incl. auditor_report, contingent_liabilities, related_party) in 1 payload under cap.
+- **Fix 5 (Rs Cr normalisation)**: `_unit_to_crore_mult` (lakhs ÷100, Mn ×10, Rs ÷1e7) applied AFTER text-verification (matching stays against raw filing numbers). **BEL: 732,772 lakhs → 7,327.72 Rs Cr** (Revenue p8, PBT 2,054.11, PAT 1,540.37; QoQ +32.1%/+47.1%/+46.1%, YoY +26.5%/+18.9%/+19.7%).
+- **Fix 6 (dedupe)**: one card per (ticker, period), keeps most verified rows; losers marked skipped. 16 raw → deduped.
+- **make refresh**: root Makefile → `scripts/refresh_snapshot.py` (ingest→market→classify→enrich→snapshot). Snapshot now commits announcements + **research_reports.json (6 reports) + renders.json (39)**; `snapshot.restore_if_empty()` repopulates a fresh DB at startup (fresh-deploy demo resilience).
+- **Costs (/api/admin/costs)**: 100 calls — 84 flash-lite / 16 flash (84% cheap routing), 644k in + 67k out tokens, 22% cache hits; strong model only for 6 syntheses + 5 results-verification retries.
+- Frontend build green; research reports cover IRCTC + all 5 ad-hoc tickers (ETERNAL, DMART, KPITTECH, CDSL, VARUNBEV).
+
 ## 2026-11-15 — Review fixes 1-6 implemented + tested (17/17), model shortlist verified
 - **Models (fix 1)**: `scripts/test_models.py` real calls — `gemini-3.5-flash-lite` OK (1.0s, clean JSON); `gemini-2.5-pro` **404 "no longer available to new users"** (2.5-flash too); `gemini-3.5-flash` OK (JSON + thinking 512 ≈ 12s). Final: `LLM_CHEAP=gemini-3.5-flash-lite`, `LLM_STRONG=gemini-3.5-flash` (flash non-lite per user rule).
 - **Bios (fix 2)**: filing-first — read first 2 pages of the announcement PDF, extract person/role/incoming + `bio_in_filing` verbatim; filing bio wins (primary, free, source = PDF#page=1). Else Tavily with `person + company + role`; snippets must mention the company/ticker (code check) else honest "No reliable public profile found"; source URLs stored + rendered as chips.

@@ -10,7 +10,11 @@ export function ResultsCardView({ data }: { data: ResultsCardT }) {
           Results · {data.period}
         </span>
         <span className="text-[10px] text-zinc-500">
-          {data.source?.doc ? `source: ${data.source.doc}${data.source.page ? ` p.${data.source.page}` : ""}` : ""}
+          {data.source_type === "scanned"
+            ? `from scanned page ${data.source?.page || "?"}`
+            : data.source?.page
+              ? `source: ${data.source.doc} p.${data.source.page}`
+              : ""}
         </span>
       </div>
       <table className="w-full text-left text-xs">

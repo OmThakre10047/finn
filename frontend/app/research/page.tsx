@@ -65,16 +65,16 @@ export default function ResearchPage() {
     setReport(null);
     setStatus("Fetching primary sources…");
     try {
-      let d = await apiPost<{ status: string; report?: ResearchReport }>(`/api/research/${t.toUpperCase()}`);
+      let d = await apiPost<{ status: string; report?: ResearchReport; error?: string }>(`/api/research/${t.toUpperCase()}`);
       let tries = 0;
       while (d.status === "pending" && tries < 60) {
         await new Promise((r) => setTimeout(r, 3000));
         setStatus(tries % 2 ? "Reading transcripts…" : "Extracting promises & numbers…");
-        d = await apiGet(`/api/research/${t.toUpperCase()}`);
+        d = await apiGet<{ status: string; report?: ResearchReport; error?: string }>(`/api/research/${t.toUpperCase()}`);
         tries++;
       }
       if (d.status === "done" && d.report) setReport(d.report);
-      else if (d.status === "error") setErr(d.report ? "Report failed — check backend logs." : "Report failed.");
+      else if (d.status === "error") setErr(d.error || "Report generation failed.");
       else setStatus("Still working… try again shortly.");
     } catch (e) {
       setErr(String((e as Error).message));
@@ -112,7 +112,15 @@ export default function ResearchPage() {
       </div>
 
       {status && <div className="card mt-4 animate-pulse p-4 text-sm text-zinc-500">{status}</div>}
-      {err && <div className="card mt-4 p-4 text-sm text-rose-400">{err}</div>}
+      {err && (
+        <div className="card mt-4 p-4">
+          <div className="text-sm font-semibold text-rose-400">Research failed</div>
+          <p className="num mt-1 break-words text-xs text-zinc-500">{err}</p>
+          <button className="btn-primary mt-3" onClick={() => load(ticker.trim().toUpperCase())}>
+            Retry
+          </button>
+        </div>
+      )}
 
       {report && (
         <div className="mt-5">

@@ -37,7 +37,7 @@ def extract_person(ticker: str, subject: str, pdf_url: str | None) -> dict | Non
         "No guessing — use only what is written."
     )
     out = llm.call_json("bio_person_extract", prompt, tier="cheap")
-    if out and out.get("person") and out.get("is_incoming", True):
+    if isinstance(out, dict) and out.get("person") and out.get("is_incoming", True):
         return out
     return None
 
