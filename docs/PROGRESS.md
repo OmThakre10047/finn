@@ -1,5 +1,17 @@
 # PROGRESS
 
+## 2026-11-15 — Step 10 (scaffold) complete: frontend built + E2E smoke green
+- Next.js 14 (App Router, TS, Tailwind), mobile-first max-w-lg, bottom tab bar (Digest/Alerts/Research/Settings), dark default + light toggle (localStorage + no-flash init script), installable PWA (manifest + generated 192/512 icons, standalone display).
+- Digest hero: window chips (24h→30d), 3-stat strip (material / routine collapsed / % rules-handled free), expandable material cards with ResultsCard + BioCard renders + PDF link, routine collapsed by category.
+- Research page: ticker box + 5 ad-hoc demo chips → POST + poll → 8 sections + Promise Tracker with citation chips. Alerts page: volume/price/material cards. Settings: threshold sliders, watch-type chips, portfolio add/remove.
+- `npm run build` green (91KB first load); CORS preflight verified; E2E smoke (backend :8000 + next start :3000) passed.
+- backend: digest renders now JSON-parsed server-side.
+
+## 2026-11-15 — Step 6 complete: digest endpoint + screener.in client
+- `app/digest.py`: window filter (parses NSE dates), material expanded / routine collapsed by category, stats incl. rules_pct; `GET /api/digest?window_hours=` live (7d: 16 items, 6 material, 87.5% rules-handled).
+- `app/screener.py`: chrome-impersonated fetch; **documents parser reverse-engineered** (`div.documents.concalls` / `div.documents.annual-reports` blocks, period labels, BSE AttachHis/AnnPdfOpen links) — IRCTC: 29 concalls + 7 ARs; RELIANCE: 63 concalls + 14 ARs. Quarterly table parser: 12 quarters × Sales/OP/PBT/NP; top-ratios parsed (ROCE/ROE etc.).
+- All filing PDFs confirmed on BSE hosts that serve PDFs.
+
 ## 2026-11-15 — Step 5 (in progress): LLM router + cost ledger + rules-first classifier
 - `app/llm.py`: Gemini router — env-only model names, JSON mode, 429/5xx retry w/ backoff, `llm_cache` (sha256 of model+task+prompt), cost ledger rows on every call (cache hits logged at 0 tokens, `cache_hit=1`).
 - `app/classifier.py`: **rules-first** — 17 curated regex rules over NSE standard headers (desc) then subject; ambiguous headers ("General Updates", "Outcome of Board Meeting"…) go to cheap-LLM batch; priority scoring by category + watch-type boost + recency.

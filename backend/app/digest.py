@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+import json
 
 from . import db
 from .config import PORTFOLIO
@@ -26,7 +27,10 @@ def build_digest(window_hours: int = 24, ticker: str | None = None) -> dict:
         watch = {r["key"]: bool(r["is_enabled"]) for r in conn.execute("SELECT key, is_enabled FROM watch_types")}
         renders = {}
         for r in conn.execute("SELECT announcement_id, kind, payload_json FROM renders"):
-            renders.setdefault(r["announcement_id"], {})[r["kind"]] = r["payload_json"]
+            try:
+                renders.setdefault(r["announcement_id"], {})[r["kind"]] = json.loads(r["payload_json"])
+            except (TypeError, ValueError):
+                pass
 
     material, routine = [], []
     seen = set()

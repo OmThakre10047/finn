@@ -1,0 +1,63 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+.dark {
+  color-scheme: dark;
+}
+
+body {
+  @apply bg-zinc-100 text-zinc-900 antialiased;
+}
+
+.dark body {
+  @apply bg-ink-950 text-zinc-100;
+}
+
+.card {
+  @apply rounded-xl border border-zinc-200 bg-white shadow-sm;
+}
+
+.dark .card {
+  @apply border-ink-700 bg-ink-900 shadow-none;
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+.chip {
+  @apply rounded-full px-3 py-1 text-xs font-medium border border-zinc-300 text-zinc-600;
+}
+
+.dark .chip {
+  @apply border-ink-700 text-zinc-400;
+}
+
+.chip-active {
+  @apply border-accent/60 bg-accent/10 !text-accent;
+}
+
+.input {
+  @apply w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-accent;
+}
+
+.dark .input {
+  @apply border-ink-700 bg-ink-800 text-zinc-100;
+}
+
+.btn-primary {
+  @apply rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-ink-950 active:opacity-80 disabled:opacity-50;
+}
+
+.section-prose p {
+  @apply mb-2 leading-relaxed;
+}
+
+.section-prose li {
+  @apply mb-1 leading-relaxed;
+}
