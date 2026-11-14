@@ -11,6 +11,16 @@ from .ingest import ingest
 from . import market
 from .config import ADHOC_TICKERS
 from .digest import build_digest
+from . import research
+
+
+def _enrich_all() -> dict:
+    from . import classifier, enrich_bio, enrich_results
+
+    cs = classifier.classify_all()
+    rc = enrich_results.enrich_results()
+    bc = enrich_bio.enrich_bios()
+    return {"classify": cs, "results_cards": rc, "bios": bc}
 
 app = FastAPI(title="FINN API", version="0.2.0")
 app.add_middleware(
@@ -57,13 +67,31 @@ def health() -> dict:
 
 
 @app.post("/api/refresh")
-def refresh(days_back: int = 3) -> dict:
+def refresh(days_back: int = 3, enrich: bool = True) -> dict:
     ing = ingest(days_back)
     with get_db() as conn:
         s = dict(conn.execute("SELECT volume_mult, price_move_pct FROM alert_settings WHERE id = 1").fetchone())
     mk = market.refresh_market(PORTFOLIO)
     fired = market.run_market_rules(s["volume_mult"], s["price_move_pct"])
-    return {"ingest": ing, "market": mk, "alerts_fired": fired}
+    enr = _enrich_all() if enrich else None
+    return {"ingest": ing, "market": mk, "alerts_fired": fired, "enrich": enr}
+
+
+@app.post("/api/research/{ticker}")
+def research_start(ticker: str) -> dict:
+    from . import llm
+
+    if not llm.configured():
+        raise HTTPException(503, "LLM not configured — set GEMINI_API_KEY + model names in backend/.env")
+    return research.start(ticker)
+
+
+@app.get("/api/research/{ticker}")
+def research_get(ticker: str) -> dict:
+    st = research.get_status(ticker)
+    if st["status"] == "missing":
+        raise HTTPException(404, f"No research started for {ticker.upper()} — POST first")
+    return st
 
 
 @app.get("/api/portfolio")

@@ -1,5 +1,13 @@
 # PROGRESS
 
+## 2026-11-15 — Steps 7/8/9 built (awaiting LLM model env lines), ingest accounting clarified
+- User sanity-check on "2,801 in 3 days" resolved: that is the WHOLE-MARKET NSE feed (fetch layer); stored/DB = 16 portfolio rows over 3 days (~0.3/stock/day, correct for large caps). Per-symbol counts + HDFCBANK subjects shown. Snapshot intentionally holds portfolio rows only (30KB).
+- `list_models.py` ran against user's key: full catalog returned. Proposed: `LLM_CHEAP=gemini-3.5-flash-lite`, `LLM_STRONG=gemini-2.5-pro` (fallbacks: 2.5-flash-lite / 3.1-pro-preview). Names env-only per user rule.
+- `app/enrich_results.py` (step 7): pypdf text + page-selector heuristic (results-statement keywords) → CHEAP extraction first → Python does ALL arithmetic (QoQ/YoY derived from absolutes; EBITDA = PBT+interest+depreciation if unstated) → sanity checks (rows present, |QoQ/YoY|<300%, PAT≤PBT×1.05) → STRONG retry only on failure. Renders cached per announcement.
+- `app/enrich_bio.py` (step 8): CHEAP person/role extraction → Tavily search → CHEAP 2-3 sentence bio → render; negative results cached too.
+- `app/research.py` (step 9): screener docs → latest AR + last 4 concalls → PDF cache w/ content hash → [[PAGE n]] markers → ONE cheap extraction call per doc (1M-token input fits whole transcript) → screener quarterly actuals (last 8 quarters) → STRONG synthesis (8 sections + Promise Tracker) → code drops uncited promise rows; verdicts delivered/missed/partial/unverifiable; report cached 24h in research_reports; threaded worker + poll endpoints.
+- Endpoints: `POST/GET /api/research/{ticker}` (503 if LLM unconfigured, 404 if never started), `/api/refresh` now runs classify→results-card→bio chain.
+
 ## 2026-11-15 — Step 10 (scaffold) complete: frontend built + E2E smoke green
 - Next.js 14 (App Router, TS, Tailwind), mobile-first max-w-lg, bottom tab bar (Digest/Alerts/Research/Settings), dark default + light toggle (localStorage + no-flash init script), installable PWA (manifest + generated 192/512 icons, standalone display).
 - Digest hero: window chips (24h→30d), 3-stat strip (material / routine collapsed / % rules-handled free), expandable material cards with ResultsCard + BioCard renders + PDF link, routine collapsed by category.
