@@ -1,5 +1,12 @@
 # PROGRESS
 
+## 2026-11-15 — Step 2 complete: backend scaffold + SQLite schema + health/costs
+- `backend/requirements.txt` (pinned; fastapi, curl_cffi, yfinance, pypdf, pdfplumber, bs4, google-genai, …), venv created, imports verified on Python 3.10.
+- `app/config.py`: env-only settings; 18-ticker portfolio; 5 ad-hoc tickers; 17 watch-type defaults; alert defaults (2.0× vol, 4% move, 24h).
+- `app/db.py`: full schema — portfolio, watch_types, alert_settings, announcements (+idx, dedup unique), renders, price_bars, alerts, filings, chunks, research_reports, llm_cache, **llm_calls (cost ledger)**, source_state. WAL mode.
+- `app/main.py`: FastAPI + CORS; startup seeds portfolio/watch-types/settings; `GET /api/health` (per-source live|snapshot|error + LLM config state); `GET /api/admin/costs` (totals, cache-hit %, by-task, by-model).
+- Smoke test on :8000 passed — health + costs return correct shapes; LLM shows unconfigured until user fills `.env`.
+
 ## 2026-11-15 — Step 1 complete: repo init, briefs ingested, plan locked (v1.2)
 - Probed all data sources from this machine (raw results in `docs/PLAN.md` §0):
   - NSE announcements API: 403/301 via curl+python TLS → **200 via curl_cffi chrome impersonation** (20 records). Live ingest = CORE.
