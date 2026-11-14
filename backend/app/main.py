@@ -10,6 +10,7 @@ from .db import get_db, get_source_state
 from .ingest import ingest
 from . import market
 from .config import ADHOC_TICKERS
+from .digest import build_digest
 
 app = FastAPI(title="FINN API", version="0.2.0")
 app.add_middleware(
@@ -147,6 +148,11 @@ def announcements(
     with get_db() as conn:
         rows = [dict(r) for r in conn.execute(q, params)]
     return {"window_hours": window_hours, "count": len(rows), "items": rows}
+
+
+@app.get("/api/digest")
+def digest(window_hours: int = Query(24, ge=1, le=24 * 30), ticker: str | None = None) -> dict:
+    return build_digest(window_hours, ticker)
 
 
 @app.get("/api/admin/costs")
