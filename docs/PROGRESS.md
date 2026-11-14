@@ -1,5 +1,11 @@
 # PROGRESS
 
+## 2026-11-15 — Step 5 (in progress): LLM router + cost ledger + rules-first classifier
+- `app/llm.py`: Gemini router — env-only model names, JSON mode, 429/5xx retry w/ backoff, `llm_cache` (sha256 of model+task+prompt), cost ledger rows on every call (cache hits logged at 0 tokens, `cache_hit=1`).
+- `app/classifier.py`: **rules-first** — 17 curated regex rules over NSE standard headers (desc) then subject; ambiguous headers ("General Updates", "Outcome of Board Meeting"…) go to cheap-LLM batch; priority scoring by category + watch-type boost + recency.
+- `scripts/list_models.py`: dumps every model the user's key can use (input/output token limits) → pick LLM_CHEAP (prefer flash-lite) + LLM_STRONG; names stay in env only.
+- **Live run: 14/16 (87.5%) classified FREE by rules**; 2 leftovers (DRREDDY/INFY "General Updates") await key. Spot-verified: IRCTC "Outcome of Board Meeting" = actual Q2FY27 financial results filing (ideal step-7 test case); HDFCBANK "General Updates" = RBI approval of Whole-time Director re-appointment → management_change ✓.
+
 ## 2026-11-15 — Step 4 complete: yfinance EOD bars + alert rules + settings/portfolio endpoints
 - `app/market.py`: fetch (`.NS` → `.BO` fallback), store 40d of daily bars, rules engine (volume ≥ N×20-day avg; |move| ≥ ±X%; severity escalation at 2×X), dedup on (ticker,type,payload).
 - Endpoints: `POST /api/refresh` (ingest + market + rules in one call), `GET/POST/DELETE /api/portfolio`, `GET/POST /api/settings/alerts`, `GET/POST /api/settings/watch-types`, `GET /api/alerts`.
