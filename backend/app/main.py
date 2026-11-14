@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+import json
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -7,6 +8,8 @@ from . import db
 from .config import ALLOWED_ORIGINS, DEFAULT_ALERT_SETTINGS, LLM_CHEAP, LLM_STRONG, PORTFOLIO, WATCH_TYPES
 from .db import get_db, get_source_state
 from .ingest import ingest
+from . import market
+from .config import ADHOC_TICKERS
 
 app = FastAPI(title="FINN API", version="0.2.0")
 app.add_middleware(
@@ -54,7 +57,79 @@ def health() -> dict:
 
 @app.post("/api/refresh")
 def refresh(days_back: int = 3) -> dict:
-    return ingest(days_back)
+    ing = ingest(days_back)
+    with get_db() as conn:
+        s = dict(conn.execute("SELECT volume_mult, price_move_pct FROM alert_settings WHERE id = 1").fetchone())
+    mk = market.refresh_market(PORTFOLIO)
+    fired = market.run_market_rules(s["volume_mult"], s["price_move_pct"])
+    return {"ingest": ing, "market": mk, "alerts_fired": fired}
+
+
+@app.get("/api/portfolio")
+def portfolio_list() -> dict:
+    with get_db() as conn:
+        rows = [dict(r) for r in conn.execute("SELECT ticker, name, is_active FROM portfolio ORDER BY ticker")]
+    return {"portfolio": rows, "adhoc_demo": ADHOC_TICKERS}
+
+
+@app.post("/api/portfolio")
+def portfolio_add(body: dict) -> dict:
+    t = str(body.get("ticker", "")).upper().strip()
+    if not t:
+        raise HTTPException(400, "ticker required")
+    with get_db() as conn:
+        conn.execute("INSERT OR IGNORE INTO portfolio (ticker, exchange) VALUES (?, 'NSE')", (t,))
+    return {"ok": True, "ticker": t}
+
+
+@app.delete("/api/portfolio/{ticker}")
+def portfolio_remove(ticker: str) -> dict:
+    with get_db() as conn:
+        conn.execute("DELETE FROM portfolio WHERE ticker = ?", (ticker.upper(),))
+    return {"ok": True}
+
+
+@app.get("/api/settings/alerts")
+def get_alert_settings() -> dict:
+    with get_db() as conn:
+        return dict(conn.execute("SELECT * FROM alert_settings WHERE id = 1").fetchone())
+
+
+@app.post("/api/settings/alerts")
+def set_alert_settings(body: dict) -> dict:
+    with get_db() as conn:
+        for k, col in (("volume_mult", "volume_mult"), ("price_move_pct", "price_move_pct"), ("window_hours", "window_hours")):
+            if k in body:
+                conn.execute(f"UPDATE alert_settings SET {col} = ? WHERE id = 1", (body[k],))
+        return dict(conn.execute("SELECT * FROM alert_settings WHERE id = 1").fetchone())
+
+
+@app.get("/api/settings/watch-types")
+def get_watch_types() -> dict:
+    with get_db() as conn:
+        return {"watch_types": [dict(r) for r in conn.execute("SELECT * FROM watch_types ORDER BY key")]}
+
+
+@app.post("/api/settings/watch-types")
+def set_watch_types(body: dict) -> dict:
+    enabled = body.get("enabled", {})
+    with get_db() as conn:
+        for k, v in enabled.items():
+            conn.execute("UPDATE watch_types SET is_enabled = ? WHERE key = ?", (1 if v else 0, k))
+    return get_watch_types()
+
+
+@app.get("/api/alerts")
+def list_alerts(since_hours: int = Query(168, ge=1, le=24 * 30)) -> dict:
+    cutoff = (datetime.utcnow() - timedelta(hours=since_hours)).isoformat(timespec="seconds")
+    with get_db() as conn:
+        rows = [dict(r) for r in conn.execute(
+            "SELECT id, ticker, type, payload_json, severity, created_at FROM alerts WHERE created_at >= ? ORDER BY created_at DESC LIMIT 200",
+            (cutoff,),
+        )]
+    for r in rows:
+        r["payload"] = json.loads(r.pop("payload_json"))
+    return {"count": len(rows), "alerts": rows}
 
 
 @app.get("/api/announcements")
