@@ -1,5 +1,19 @@
 # PROGRESS
 
+## 2026-11-15 — Step 4 complete: yfinance EOD bars + alert rules + settings/portfolio endpoints
+- `app/market.py`: fetch (`.NS` → `.BO` fallback), store 40d of daily bars, rules engine (volume ≥ N×20-day avg; |move| ≥ ±X%; severity escalation at 2×X), dedup on (ticker,type,payload).
+- Endpoints: `POST /api/refresh` (ingest + market + rules in one call), `GET/POST/DELETE /api/portfolio`, `GET/POST /api/settings/alerts`, `GET/POST /api/settings/watch-types`, `GET /api/alerts`.
+- Live run: 17/18 tickers got bars (680 rows). TATAMOTORS returns 0 bars on Yahoo (post-demerger ticker change) → swapped to TATASTEEL (40 bars, close 186.68); portfolio + config updated.
+- Rules engine proven: with tiny thresholds (0.0001) 33 alerts fired across tickers with correct math (e.g. ADANIENT −1.95%, vol ratio 0.71); test rows cleaned; natural thresholds fired 0 today (quiet Friday) — fine.
+- API smoke: /api/portfolio lists 18 tickers; /api/alerts empty; /api/refresh returns ingest+market+alerts in one response.
+
+## 2026-11-15 — Step 3 complete: NSE live ingest + snapshot fallback + PDF fetch
+- `app/nse_client.py`: curl_cffi chrome124 session with homepage warm-up; 3 fetch strategies (GET+dates works: `from_date/to_date` dd-mm-yyyy); normalize (symbol/desc/attchmntText/attchmntFile/an_dt); PDF downloader (nsearchives direct + BSE AttachLive fallback, `%PDF-` magic check).
+- `app/ingest.py`: ingest(days_back) → live fetch → save snapshot (portfolio rows only, 30KB committed) → upsert with UNIQUE dedup; on failure → snapshot mode + source_state.
+- **Live result: 2,801 announcements over 3 days, 16 matched portfolio (HDFCBANK "Change in Director(s)", BEL order-win, RELIANCE concall notice…)**. Re-run inserted 0 (dedup verified).
+- PDF download verified: ADANIENT media release 189,156 bytes, valid PDF from nsearchives.in.
+- Endpoints: `POST /api/refresh`, `GET /api/announcements?window_hours=&ticker=`.
+
 ## 2026-11-15 — Step 2 complete: backend scaffold + SQLite schema + health/costs
 - `backend/requirements.txt` (pinned; fastapi, curl_cffi, yfinance, pypdf, pdfplumber, bs4, google-genai, …), venv created, imports verified on Python 3.10.
 - `app/config.py`: env-only settings; 18-ticker portfolio; 5 ad-hoc tickers; 17 watch-type defaults; alert defaults (2.0× vol, 4% move, 24h).
