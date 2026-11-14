@@ -1,9 +1,12 @@
-from fastapi import FastAPI
+from datetime import datetime, timedelta
+
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
 from . import db
 from .config import ALLOWED_ORIGINS, DEFAULT_ALERT_SETTINGS, LLM_CHEAP, LLM_STRONG, PORTFOLIO, WATCH_TYPES
 from .db import get_db, get_source_state
+from .ingest import ingest
 
 app = FastAPI(title="FINN API", version="0.2.0")
 app.add_middleware(
@@ -47,6 +50,28 @@ def health() -> dict:
         "llm_models": {"cheap": LLM_CHEAP or None, "strong": LLM_STRONG or None},
         "sources": {s: get_source_state(s) for s in SOURCES},
     }
+
+
+@app.post("/api/refresh")
+def refresh(days_back: int = 3) -> dict:
+    return ingest(days_back)
+
+
+@app.get("/api/announcements")
+def announcements(
+    window_hours: int = Query(24, ge=1, le=24 * 30),
+    ticker: str | None = None,
+) -> dict:
+    since = (datetime.utcnow() - timedelta(hours=window_hours)).isoformat(timespec="seconds")
+    q = "SELECT id, ticker, headline, nse_category, subject, pdf_url, published_at, summary, materiality, category, priority FROM announcements WHERE published_at >= ?"
+    params: list = [since]
+    if ticker:
+        q += " AND ticker = ?"
+        params.append(ticker.upper())
+    q += " ORDER BY published_at DESC LIMIT 500"
+    with get_db() as conn:
+        rows = [dict(r) for r in conn.execute(q, params)]
+    return {"window_hours": window_hours, "count": len(rows), "items": rows}
 
 
 @app.get("/api/admin/costs")

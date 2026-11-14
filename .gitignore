@@ -9,9 +9,10 @@ venv/
 backend/.env
 .env
 
-# Data (finn.db is regenerated; snapshots/ dir contents are committed explicitly)
+# Data (finn.db is regenerated; snapshot JSON is committed)
 backend/data/finn.db
 backend/data/cache/
+backend/data/filings/
 
 # Node / Next.js
 node_modules/
