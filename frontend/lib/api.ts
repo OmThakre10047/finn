@@ -48,16 +48,17 @@ export type ResultsCard = {
   ticker: string;
   period: string;
   currency: string;
-  rows: { label: string; current: number; qoq: number | null; yoy: number | null; unit: string }[];
+  rows: { label: string; current: number; qoq: number | null; yoy: number | null; page?: number }[];
   source: { doc: string; page: string };
-  confidence: "high" | "low";
+  confidence: "high" | "low" | "strong-recheck";
 };
 
 export type BioCard = {
   person: string;
   role: string;
   bio: string;
-  source_query: string;
+  sources?: string[];
+  source_type?: "filing" | "web" | "none";
 };
 
 export type Alert = {

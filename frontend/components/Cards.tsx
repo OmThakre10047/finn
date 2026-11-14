@@ -25,7 +25,10 @@ export function ResultsCardView({ data }: { data: ResultsCardT }) {
         <tbody className="num">
           {data.rows?.map((r) => (
             <tr key={r.label} className="border-t border-zinc-200/60 dark:border-ink-700/60">
-              <td className="py-1.5 font-medium">{r.label}</td>
+              <td className="py-1.5 font-medium">
+                {r.label}
+                {r.page ? <span className="ml-1 text-[9px] text-zinc-400">p.{r.page}</span> : null}
+              </td>
               <td className="py-1.5 text-right">{r.current?.toLocaleString()}</td>
               <td className={`py-1.5 text-right ${(r.qoq ?? 0) >= 0 ? "text-accent" : "text-rose-400"}`}>
                 {r.qoq == null ? "—" : `${r.qoq > 0 ? "+" : ""}${r.qoq}%`}
@@ -50,6 +53,15 @@ export function BioCardView({ data }: { data: BioCardT }) {
       <div className="text-sm font-semibold">{data.person}</div>
       <div className="mb-1.5 text-xs text-zinc-500">{data.role}</div>
       <p className="text-xs leading-relaxed text-zinc-600 dark:text-zinc-300">{data.bio}</p>
+      {data.sources && data.sources.length > 0 && (
+        <div className="mt-1.5 flex flex-wrap gap-1">
+          {data.sources.slice(0, 3).map((u, i) => (
+            <a key={i} href={u} target="_blank" rel="noreferrer" className="chip text-[10px]">
+              source {i + 1} ↗
+            </a>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

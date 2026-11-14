@@ -103,11 +103,34 @@ def parse_snapshot_metrics(html: str) -> dict:
     return top
 
 
+def parse_company_name(html: str) -> str:
+    from bs4 import BeautifulSoup
+
+    soup = BeautifulSoup(html, "lxml")
+    h1 = soup.find("h1")
+    if h1:
+        t = h1.get_text(" ", strip=True)
+        return re.sub(r"\s*(share price|stock price).*$", "", t, flags=re.I).strip() or t
+    return ""
+
+
+def parse_period_date(label: str):
+    from datetime import datetime
+
+    for fmt in ("%b %Y", "%B %Y", "%Y"):
+        try:
+            return datetime.strptime(label.strip(), fmt)
+        except ValueError:
+            continue
+    return None
+
+
 def fetch_all(ticker: str) -> dict:
     html = fetch_company_html(ticker)
     time.sleep(0.3)
     return {
         "ticker": ticker,
+        "name": parse_company_name(html),
         "documents": parse_documents(html),
         "quarterly": parse_quarterly_table(html),
         "top_ratios": parse_snapshot_metrics(html),

@@ -45,6 +45,45 @@ def _num_ok(x) -> bool:
     return isinstance(x, (int, float)) and not isinstance(x, bool) and abs(x) < 1e9
 
 
+def _normalize(s: str) -> str:
+    return re.sub(r"[\s,]", "", s)
+
+
+def _num_variants(v: float) -> list[str]:
+    out = []
+    if float(v) == int(v):
+        out.append(str(int(v)))
+    out.append(f"{v:.2f}".rstrip("0").rstrip("."))
+    out.append(f"{v:.1f}")
+    out.append(f"{v:.0f}")
+    return list(dict.fromkeys(out))
+
+
+def _find_page(pages: list[int], page_texts: dict[int, str], value) -> int | None:
+    if not _num_ok(value):
+        return None
+    for v in _num_variants(float(value)):
+        needle = _normalize(v)
+        for i in pages:
+            if needle in _normalize(page_texts.get(i, "")):
+                return i + 1
+    return None
+
+
+def verify_rows(card: dict, pages: list[str], page_idx: list[int]) -> dict:
+    page_texts = {i: pages[i] for i in page_idx if i < len(pages)}
+    kept = []
+    for r in card.get("rows", []):
+        page = _find_page(page_idx, page_texts, r.get("current"))
+        if page is None:
+            continue
+        r["page"] = page
+        kept.append(r)
+    card["rows"] = kept
+    card["source"] = {"doc": "results filing", "page": str(kept[0]["page"]) if kept else ""}
+    return card
+
+
 def sanity_check(card: dict) -> bool:
     rows = card.get("rows") or []
     if not isinstance(rows, list) or len(rows) < 3:
@@ -86,14 +125,18 @@ def build_results_card(ann_id: int, ticker: str, pdf_url: str, subject: str) -> 
     card = None
     if data and isinstance(data.get("rows"), list):
         card = _finalize(data, ticker, page_idx, "high")
-        if card and sanity_check(card):
-            return card
+        if card:
+            card = verify_rows(card, pages, page_idx)
+            if sanity_check(card):
+                return card
     strong = llm.call_json("results_extract_strong", prompt, tier="strong")
     if strong and isinstance(strong.get("rows"), list):
         card = _finalize(strong, ticker, page_idx, "strong-recheck")
-        if card and sanity_check(card):
-            return card
-    return card if card and sanity_check(card) else None
+        if card:
+            card = verify_rows(card, pages, page_idx)
+            if sanity_check(card):
+                return card
+    return None
 
 
 def _finalize(data: dict, ticker: str, page_idx: list[int], confidence: str) -> dict | None:
@@ -108,13 +151,12 @@ def _finalize(data: dict, ticker: str, page_idx: list[int], confidence: str) -> 
         rows.append({"label": r.get("label", "?"), "current": cur, "qoq": qoq, "yoy": yoy})
     if not rows:
         return None
-    src_page = (page_idx[0] + 1) if page_idx else None
     return {
         "ticker": ticker,
         "period": data.get("period", ""),
         "currency": unit,
         "rows": rows,
-        "source": {"doc": "results filing", "page": str(src_page) if src_page else ""},
+        "source": {"doc": "results filing", "page": ""},
         "confidence": confidence,
     }
 
