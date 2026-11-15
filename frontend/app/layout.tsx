@@ -8,6 +8,7 @@ export const metadata: Metadata = {
   description: "Push what matters. Pull grounded research. Built for a daily investor's workflow.",
   manifest: "/manifest.webmanifest",
   appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "FINN" },
+  other: { "mobile-web-app-capable": "yes" },
 };
 
 export const viewport: Viewport = {
