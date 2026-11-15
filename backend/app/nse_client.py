@@ -1,4 +1,5 @@
 import json
+from datetime import datetime
 import random
 import time
 
@@ -22,6 +23,24 @@ def _new_session() -> cr.Session:
             s.get(warm, timeout=20)
         except Exception:
             time.sleep(0.5 + random.random())
+    return s
+
+
+PUB_FORMATS = ("%d-%b-%Y %H:%M:%S", "%d %b %Y %H:%M", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S", "%d-%m-%Y %H:%M:%S")
+
+
+def iso_pub(s: str | None) -> str | None:
+    """Normalise any published_at to ISO 'YYYY-MM-DDTHH:MM:SS' so SQL date filters work."""
+    if not s:
+        return None
+    s = str(s).strip()
+    if len(s) >= 10 and s[4] == "-" and s[7] == "-":
+        return s.replace(" ", "T", 1) if "T" not in s else s
+    for fmt in PUB_FORMATS:
+        try:
+            return datetime.strptime(s, fmt).isoformat(timespec="seconds")
+        except ValueError:
+            continue
     return s
 
 
@@ -75,7 +94,7 @@ def normalize(row: dict) -> dict | None:
         "nse_category": row.get("csvName") or row.get("category") or None,
         "subject": (row.get("attchmntText") or row.get("subject") or "").strip(),
         "pdf_url": row.get("attchmntFile") or None,
-        "published_at": row.get("an_dt") or row.get("sort_date") or row.get("dt") or None,
+        "published_at": iso_pub(row.get("an_dt") or row.get("sort_date") or row.get("dt")),
         "raw": row,
     }
 

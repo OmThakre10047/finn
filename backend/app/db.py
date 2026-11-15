@@ -148,6 +148,20 @@ def init_db() -> None:
         except sqlite3.OperationalError:
             pass
         db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_alerts_dedupe ON alerts(dedupe_key) WHERE dedupe_key IS NOT NULL")
+        migrate_published_at(db)
+
+
+def migrate_published_at(db: sqlite3.Connection) -> None:
+    """Normalise legacy NSE 'dd-Mon-yyyy HH:MM:SS' published_at to ISO."""
+    from .nse_client import iso_pub
+
+    rows = db.execute(
+        "SELECT id, published_at FROM announcements WHERE published_at IS NOT NULL AND published_at NOT GLOB '[0-9][0-9][0-9][0-9]-*'"
+    ).fetchall()
+    for r in rows:
+        iso = iso_pub(r["published_at"])
+        if iso:
+            db.execute("UPDATE announcements SET published_at = ? WHERE id = ?", (iso, r["id"]))
 
 
 def get_source_state(source: str):

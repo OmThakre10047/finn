@@ -137,6 +137,13 @@ def set_alert_settings(body: dict) -> dict:
                 conn.execute(f"UPDATE alert_settings SET {col} = ? WHERE id = 1", (body[k],))
         s = dict(conn.execute("SELECT * FROM alert_settings WHERE id = 1").fetchone())
         watch = {r["key"]: bool(r["is_enabled"]) for r in conn.execute("SELECT key, is_enabled FROM watch_types")}
+        conn.execute("DELETE FROM alerts WHERE type IN ('volume', 'price')")
+        watched = [k for k, v in watch.items() if v]
+        qmarks = ",".join("?" for _ in watched) or "''"
+        conn.execute(
+            f"DELETE FROM alerts WHERE type = 'material' AND json_extract(payload_json, '$.category') NOT IN ({qmarks})",
+            watched or [""],
+        )
     market.backfill_market_alerts(s["volume_mult"], s["price_move_pct"])
     market.backfill_material_alerts(watch)
     return s
@@ -154,6 +161,16 @@ def set_watch_types(body: dict) -> dict:
     with get_db() as conn:
         for k, v in enabled.items():
             conn.execute("UPDATE watch_types SET is_enabled = ? WHERE key = ?", (1 if v else 0, k))
+        watch = {r["key"]: bool(r["is_enabled"]) for r in conn.execute("SELECT key, is_enabled FROM watch_types")}
+        watched = [k for k, v in watch.items() if v]
+        qmarks = ",".join("?" for _ in watched) or "''"
+        conn.execute(
+            f"DELETE FROM alerts WHERE type = 'material' AND json_extract(payload_json, '$.category') NOT IN ({qmarks})",
+            watched or [""],
+        )
+        s = dict(conn.execute("SELECT * FROM alert_settings WHERE id = 1").fetchone())
+    market.backfill_material_alerts(watch)
+    market.backfill_market_alerts(s["volume_mult"], s["price_move_pct"])
     return get_watch_types()
 
 
