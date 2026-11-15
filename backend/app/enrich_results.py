@@ -169,8 +169,13 @@ def _finalize(data: dict, ticker: str, page_idx: list[int], confidence: str, sou
     }
 
 
-def _unit_to_crore_mult(unit: str) -> float:
+KNOWN_UNITS = re.compile(r"(rs|inr|₹).*(cr|crore|lakh|lac|mn|million)|^(rs|inr|₹)$", re.I)
+
+
+def _unit_to_crore_mult(unit: str) -> float | None:
     u = (unit or "").lower()
+    if "yen" in u or "usd" in u or "dollar" in u or "$" in u or "billion" in u:
+        return None
     if "crore" in u or " cr" in u or u.endswith("cr"):
         return 1.0
     if "lakh" in u or " lac" in u or u.endswith("l"):
@@ -179,11 +184,14 @@ def _unit_to_crore_mult(unit: str) -> float:
         return 10.0
     if u in ("rs", "inr", "₹"):
         return 1e-7
-    return 1.0
+    return None if not KNOWN_UNITS.search(u) else 1.0
 
 
 def normalize_to_crore(card: dict) -> dict:
     mult = _unit_to_crore_mult(card.get("currency", ""))
+    if mult is None:
+        card["rows"] = []
+        return card
     if mult == 1.0:
         card["currency"] = "Rs Cr"
         return card
@@ -253,11 +261,15 @@ def build_results_card(ann_id: int, ticker: str, pdf_url: str, subject: str) -> 
         data = llm.call_json("results_extract_scanned", prompt, tier="cheap", images=images)
         card = _finalize(data, ticker, page_idx, "high-scanned", "scanned") if data else None
         if card and sanity_check(card):
-            return normalize_to_crore(card)
+            card = normalize_to_crore(card)
+            if card.get("rows"):
+                return card
         data2 = llm.call_json("results_extract_scanned_strong", prompt, tier="strong", images=images)
         card = _finalize(data2, ticker, page_idx, "strong-recheck-scanned", "scanned") if data2 else None
         if card and sanity_check(card):
-            return normalize_to_crore(card)
+            card = normalize_to_crore(card)
+            if card.get("rows"):
+                return card
         return None
 
     chunk = "\n".join(f"[[PAGE {i+1}]]\n{pages[i]}" for i in page_idx)[:14000]
@@ -270,13 +282,17 @@ def build_results_card(ann_id: int, ticker: str, pdf_url: str, subject: str) -> 
     if card:
         card = verify_rows(card, pages, page_idx)
         if sanity_check(card):
-            return normalize_to_crore(card)
+            card = normalize_to_crore(card)
+            if card.get("rows"):
+                return card
     strong = llm.call_json("results_extract_strong", prompt, tier="strong")
     card = _finalize(strong, ticker, page_idx, "strong-recheck", "text") if strong else None
     if card:
         card = verify_rows(card, pages, page_idx)
         if sanity_check(card):
-            return normalize_to_crore(card)
+            card = normalize_to_crore(card)
+            if card.get("rows"):
+                return card
     return None
 
 

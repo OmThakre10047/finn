@@ -1,5 +1,14 @@
 # PROGRESS
 
+## 2026-11-15 — Frontend rebuilt around the triage POV (Today / Radar / Research)
+- **Process**: Playwright before-screenshots at 390×844 → senior-designer critique (5 problems: stats-dashboard opening, dead quiet default, disconnected rules, invisible star feature, slack density) → rebuilt per screen, commit each.
+- **Today (`/`)**: verdict headline ("All quiet." / "N things need your attention, M more to scan."), buried-count subline, window chips + inline custom hours, MUST KNOW (top-8 by priority w/ results tables incl. per-row page refs + QoQ/YoY colouring, bio cards w/ source chips), WORTH A LOOK compact rows, ROUTINE collapsed, tap → iOS-style bottom sheet (full subject + renders + filing PDF link).
+- **Radar (`/radar`, renamed from Alerts)**: inline rules editor (volume ×, price %) with live "Would have fired N times in last 30d" preview (new `GET /api/alerts/preview` over stored bars; 40 fires at 2×/4%), watch-type toggles, Fired cards with SVG price sparkline + dashed threshold line / volume bars + avg20 line, honest empty state.
+- **Research (`/research`)**: Promise Tracker as HERO card — credibility score (% promises numerically checkable), verdict pills, quoted promise, TARGET vs DELIVERED grid, citation chips linking to source PDFs; 8 numbered `<details>` sections with citations; footer "Built from N primary documents · 0 news · ₹0"; staged honest progress; error + Retry.
+- Tabs renamed to triage language: Today / Radar / Research / Settings. Shared primitives: Sheet (slide-up), Sparkline, VolumeBars, VerdictPill, `.num` tabular monospace, hairline sections.
+- **Data-quality guards added during visual pass**: PAT>Revenue rejected in sanity; unknown currency units ("Billions of yen" from a Suzuki presentation) rejected + rows emptied; junk renders purged → **14 clean results cards**; `make refresh` re-snapshotted (6 reports + 39 renders).
+- Screens: `docs/screens/before-*.png` (critique artifacts) and `after-today-24h/30d`, `after-today-light-7d`, `after-radar`, `after-research-report` (+full-page), `after-settings`.
+
 ## 2026-11-15 — Review-2 fixes 1-6 shipped; full chain run; snapshot enriched; costs ledger live
 - **Fix 1 (ticker resolution)**: `screener.resolve_slug()` — direct slug → search-by-symbol → search-by-`sm_name` (from NSE feed) → prefix; cached in new `kv` table. Verified: VARUNBEV→**VBL**, HAPPSTMNDS→direct, SUPREMEIND→direct.
 - **Fix 2 (synthesis robustness)**: split into two strong calls (sections; promise_tracker) via new `llm.call_json_strict` (max_output_tokens=24576, thinking_budget=1024, retries, and errors that name the failure — ETERNAL's root cause was a trailing ``` fence, now handled by `raw_decode`). ETERNAL: 8 sections + 11 tracker rows; VARUNBEV: 8 + 5.
