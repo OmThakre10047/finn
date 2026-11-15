@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: finn-api
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.10.12"
+      - key: PYTHONUNBUFFERED
+        value: "1"
+      - key: FORCE_SNAPSHOT
+        value: "0"
+      - key: DB_PATH
+        value: data/finn.db
+      - key: ALLOWED_ORIGINS
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: TAVILY_API_KEY
+        sync: false
+      - key: LLM_CHEAP
+        sync: false
+      - key: LLM_STRONG
+        sync: false

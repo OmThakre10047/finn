@@ -44,18 +44,29 @@ def _doc_pages(ticker: str, url: str) -> list[str]:
         path = BACKEND_DIR / row["path"]
     elif not nse_client.download_pdf(url, path):
         return []
+    pages: list[str] = []
     try:
         from pypdf import PdfReader
 
-        pages = [(p.extract_text() or "") for p in PdfReader(str(path)).pages]
+        reader = PdfReader(str(path))
+        for i in range(len(reader.pages)):
+            try:
+                pages.append(reader.pages[i].extract_text() or "")
+            except Exception:
+                pages.append("")
     except Exception:
         pages = []
     if not pages or sum(len(p) for p in pages) < 500:
+        pages = []
         try:
             import pdfplumber
 
             with pdfplumber.open(str(path)) as pdf:
-                pages = [(p.extract_text() or "") for p in pdf.pages]
+                for p in pdf.pages:
+                    try:
+                        pages.append(p.extract_text() or "")
+                    except Exception:
+                        pages.append("")
         except Exception:
             pages = []
     with db.get_db() as conn:

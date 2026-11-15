@@ -50,6 +50,8 @@ def is_scanned(pages: list[str], page_idx: list[int]) -> bool:
 
 
 def render_pages_png(pdf_path, page_idx: list[int], scale: float = 2.5) -> list[bytes]:
+    import gc
+
     import pypdfium2 as pdfium
 
     pdf = pdfium.PdfDocument(str(pdf_path))
@@ -62,6 +64,12 @@ def render_pages_png(pdf_path, page_idx: list[int], scale: float = 2.5) -> list[
         buf = io.BytesIO()
         pil.save(buf, format="PNG")
         out.append(buf.getvalue())
+        buf.close()
+        pil.close()
+        bitmap.close()
+        del pil, bitmap
+        gc.collect()
+    pdf.close()
     return out
 
 
