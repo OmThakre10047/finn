@@ -81,7 +81,8 @@ def restore_if_empty() -> dict:
                 rows.append({
                     "ticker": r["ticker"], "headline": r["headline"], "nse_category": r.get("nse_category"),
                     "subject": r.get("subject"), "pdf_url": r.get("pdf_url"), "published_at": r.get("published_at"),
-                    "raw": r.get("raw", {}),
+                    "raw": r.get("raw", {}), "category": r.get("category"), "materiality": r.get("materiality"),
+                    "priority": r.get("priority"), "summary": r.get("summary"), "rules_handled": r.get("rules_handled"),
                 })
         if not rows:
             rows = load_snapshot()
