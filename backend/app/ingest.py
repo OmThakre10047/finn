@@ -27,10 +27,15 @@ def upsert_announcements(conn, rows: list[dict], rules_handled: int = 0) -> int:
     for r in rows:
         cur = conn.execute(
             """INSERT OR IGNORE INTO announcements
-               (ticker, headline, nse_category, subject, pdf_url, published_at, raw_json, rules_handled)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+               (ticker, headline, nse_category, subject, pdf_url, published_at, raw_json,
+                category, materiality, priority, summary, rules_handled)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (r["ticker"], r["headline"], r["nse_category"], r["subject"], r["pdf_url"],
-             r["published_at"], json.dumps(r["raw"], ensure_ascii=False), rules_handled),
+             r["published_at"], json.dumps(r["raw"], ensure_ascii=False),
+             r.get("category"), r.get("materiality"),
+             r.get("priority", 0) if r.get("priority") is not None else 0,
+             r.get("summary"),
+             r.get("rules_handled", 0) if r.get("rules_handled") is not None else rules_handled),
         )
         n += cur.rowcount
     return n
