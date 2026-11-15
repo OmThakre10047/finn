@@ -128,6 +128,10 @@ def sanity_check(card: dict) -> bool:
     if pat and pbt and pat.get("current") is not None and pbt.get("current") is not None:
         if pat["current"] > pbt["current"] * 1.05:
             return False
+    rev = next((v for l, v in by_label.items() if "revenue" in l or "sales" in l), None)
+    if rev and pat and rev.get("current") is not None and pat.get("current") is not None:
+        if rev["current"] > 0 and pat["current"] > rev["current"]:
+            return False
     return True
 
 

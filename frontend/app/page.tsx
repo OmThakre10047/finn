@@ -1,79 +1,45 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { apiGet, type Digest, type Announcement, type ResultsCard as ResultsCardData, type BioCard as BioCardData } from "@/lib/api";
-import { ResultsCardView, BioCardView } from "@/components/Cards";
+import { useEffect, useMemo, useState } from "react";
+import { apiGet, relTime, CAT_LABEL, MUST_KNOW_CATS, type Announcement, type Digest } from "@/lib/api";
+import { Sheet } from "@/components/ui";
+import { RenderBody } from "@/components/Cards";
 
 const WINDOWS = [
   { label: "24h", hours: 24 },
-  { label: "48h", hours: 48 },
   { label: "3d", hours: 72 },
   { label: "7d", hours: 168 },
   { label: "30d", hours: 720 },
 ];
 
-function relTime(s: string | null): string {
-  if (!s) return "";
-  const d = new Date(s.replace(" ", "T") + (s.includes("Z") ? "" : "Z"));
-  if (isNaN(d.getTime())) return s;
-  const mins = Math.max(0, Math.floor((Date.now() - d.getTime()) / 60000));
-  if (mins < 60) return `${mins}m ago`;
-  const h = Math.floor(mins / 60);
-  if (h < 48) return `${h}h ago`;
-  return `${Math.floor(h / 24)}d ago`;
-}
-
-const CAT_LABEL: Record<string, string> = {
-  results: "Results", mna: "M&A", fund_raise: "Fund raise", management_change: "Mgmt change",
-  litigation: "Litigation", insider_trading: "Insider", earnings_call: "Concall", investor_meetings: "Investor meet",
-  credit_rating: "Rating", dividend: "Dividend", bonus_split: "Bonus/Split", capex: "Capex",
-  press_release: "Press release", postal_ballot: "Postal ballot", agm_egm: "AGM/EGM", pledging: "Pledging",
-  unclassified: "Other",
-};
-
-function MaterialCard({ a }: { a: Announcement }) {
-  const [open, setOpen] = useState(true);
-  const watched = a.watched;
+function DetailSheet({ a, onClose }: { a: Announcement | null; onClose: () => void }) {
   return (
-    <div className="card p-3.5">
-      <button className="flex w-full items-start gap-2 text-left" onClick={() => setOpen(!open)}>
-        <span
-          className={`mt-0.5 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
-            watched ? "bg-accent/15 text-accent" : "bg-zinc-200 text-zinc-600 dark:bg-ink-800 dark:text-zinc-400"
-          }`}
-        >
-          {CAT_LABEL[a.category] || a.category}
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block text-[13px] font-semibold leading-snug">
-            {a.ticker} <span className="font-normal text-zinc-600 dark:text-zinc-400">· {a.headline}</span>
-          </span>
-          <span className="num mt-0.5 block text-[11px] text-zinc-500">
-            {relTime(a.published_at)} · priority {Math.round(a.priority)}
-          </span>
-        </span>
-        <span className="text-zinc-400">{open ? "−" : "+"}</span>
-      </button>
-      {open && (
-        <div className="mt-2 space-y-2">
-          {a.summary && <p className="text-xs leading-relaxed text-zinc-600 dark:text-zinc-300">{a.summary}</p>}
-          {a.renders?.results_card && <ResultsCardView data={a.renders.results_card as ResultsCardData} />}
-          {a.renders?.bio && <BioCardView data={a.renders.bio as BioCardData} />}
+    <Sheet open={!!a} onClose={onClose} title={a ? `${a.ticker} · ${CAT_LABEL[a.category] || a.category}` : ""}>
+      {a && (
+        <div>
+          <h3 className="text-[15px] font-bold leading-snug">{a.headline}</h3>
+          <div className="num mt-1 text-[11px] text-zinc-500">
+            filed {relTime(a.published_at)} · priority {Math.round(a.priority)} · {a.materiality}
+          </div>
+          {a.subject && <p className="mt-3 text-[13px] leading-relaxed text-zinc-600 dark:text-zinc-300">{a.subject}</p>}
+          <RenderBody a={a} />
           {a.pdf_url && (
-            <a href={a.pdf_url} target="_blank" rel="noreferrer" className="inline-block text-[11px] text-accent underline">
-              filing PDF ↗
+            <a href={a.pdf_url} target="_blank" rel="noreferrer" className="btn-primary mt-4 inline-block">
+              Open filing PDF ↗
             </a>
           )}
         </div>
       )}
-    </div>
+    </Sheet>
   );
 }
 
-export default function DigestPage() {
+export default function TodayPage() {
   const [hours, setHours] = useState(24);
+  const [custom, setCustom] = useState<number | null>(null);
   const [data, setData] = useState<Digest | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [detail, setDetail] = useState<Announcement | null>(null);
   const [routineOpen, setRoutineOpen] = useState(false);
 
   useEffect(() => {
@@ -83,96 +49,200 @@ export default function DigestPage() {
       .catch((e) => setErr(String(e.message || e)));
   }, [hours]);
 
+  const { mustKnow, worthALook } = useMemo(() => {
+    const mkAll = (data?.material || []).filter((a) => MUST_KNOW_CATS.has(a.category) || a.watched);
+    const mk = mkAll.slice(0, 8);
+    const wal = (data?.material || []).filter((a) => !mk.includes(a));
+    return { mustKnow: mk, worthALook: wal };
+  }, [data]);
+
+  const quiet = data && data.stats.total === 0;
+
   return (
-    <main className="mx-auto max-w-lg px-4 pt-6">
-      <div className="mb-4 flex items-center justify-between">
+    <main className="mx-auto max-w-lg px-4 pt-5">
+      <div className="mb-4 flex items-start justify-between">
         <div>
-          <h1 className="text-xl font-bold tracking-tight">
+          <h1 className="text-lg font-bold tracking-tight">
             FINN<span className="text-accent">.</span>
           </h1>
-          <p className="text-[11px] text-zinc-500">Your portfolio, only what matters.</p>
+          <p className="text-[11px] text-zinc-500">Triage, not a feed.</p>
         </div>
-        <button
-          className="chip"
-          onClick={async () => {
-            await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000"}/api/refresh`, { method: "POST" });
-            setHours((h) => h);
-            apiGet<Digest>(`/api/digest?window_hours=${hours}`).then(setData).catch(() => {});
-          }}
-        >
-          ↻ Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          <ThemeButton />
+        </div>
       </div>
 
-      <div className="num mb-3 flex gap-2 overflow-x-auto pb-1">
+      <div className="mb-3">
+        {quiet ? (
+          <>
+            <h2 className="text-[22px] font-bold leading-tight">All quiet.</h2>
+            <p className="mt-1 text-[13px] text-zinc-500">
+              No filings across your 18 holdings in the last {hours < 24 ? `${hours}h` : `${Math.round(hours / 24)}d`}. Nothing needs you.
+            </p>
+          </>
+        ) : (
+          <>
+            <h2 className="text-[22px] font-bold leading-tight">
+              {mustKnow.length > 0 ? (
+                <>
+                  {mustKnow.length} {mustKnow.length === 1 ? "thing needs" : "things need"} your attention
+                  {worthALook.length > 0 && <span className="text-zinc-400">, {worthALook.length} more to scan</span>}
+                  <span className="text-accent">.</span>
+                </>
+              ) : (
+                <>
+                  Nothing must-know<span className="text-accent">.</span>
+                  {worthALook.length > 0 && <span className="text-zinc-400"> {worthALook.length} worth a scan.</span>}
+                </>
+              )}
+            </h2>
+            <p className="num mt-1 text-[11px] text-zinc-500">
+              {data?.stats.routine || 0} routine filings buried · last {hours < 24 ? `${hours}h` : `${Math.round(hours / 24)}d`}
+            </p>
+          </>
+        )}
+      </div>
+
+      <div className="num mb-5 flex flex-wrap items-center gap-1.5">
         {WINDOWS.map((w) => (
-          <button
-            key={w.hours}
-            onClick={() => setHours(w.hours)}
-            className={`chip ${hours === w.hours ? "chip-active" : ""}`}
-          >
+          <button key={w.hours} onClick={() => setHours(w.hours)} className={`chip ${hours === w.hours ? "chip-active" : ""}`}>
             {w.label}
           </button>
         ))}
+        {custom != null && (
+          <button onClick={() => setCustom(null)} className={`chip ${![24, 72, 168, 720].includes(hours) ? "chip-active" : ""}`}>
+            {hours}h ×
+          </button>
+        )}
+        <button onClick={() => setCustom(custom === null ? 48 : null)} className="chip px-2">
+          {custom === null ? "+ custom" : ""}
+        </button>
+        {custom !== null && (
+          <input
+            autoFocus
+            type="number"
+            min={1}
+            max={720}
+            placeholder="hrs"
+            className="num w-16 rounded-full border border-accent/50 bg-transparent px-2 py-1 text-xs outline-none"
+            onBlur={(e) => {
+              const v = Number(e.target.value);
+              if (v >= 1 && v <= 720) setHours(v);
+              setCustom(null);
+            }}
+          />
+        )}
       </div>
 
       {err && <div className="card p-4 text-sm text-rose-400">Backend unreachable: {err}</div>}
-      {!data && !err && <div className="card animate-pulse p-4 text-sm text-zinc-500">Loading digest…</div>}
+      {!data && !err && (
+        <div className="space-y-2">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="card h-16 animate-pulse" />
+          ))}
+        </div>
+      )}
 
       {data && (
-        <>
-          <div className="num mb-4 grid grid-cols-3 gap-2 text-center">
-            <div className="card p-2.5">
-              <div className="text-lg font-bold text-accent">{data.stats.material}</div>
-              <div className="text-[10px] uppercase tracking-wide text-zinc-500">material</div>
-            </div>
-            <div className="card p-2.5">
-              <div className="text-lg font-bold">{data.stats.routine}</div>
-              <div className="text-[10px] uppercase tracking-wide text-zinc-500">routine · collapsed</div>
-            </div>
-            <div className="card p-2.5">
-              <div className="text-lg font-bold">{data.stats.rules_pct}%</div>
-              <div className="text-[10px] uppercase tracking-wide text-zinc-500">free · rules</div>
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            {data.material.length === 0 && (
-              <div className="card p-4 text-sm text-zinc-500">
-                No material announcements in this window. Quiet is good.
+        <div className="space-y-5 pb-4">
+          {mustKnow.length > 0 && (
+            <section>
+              <div className="eyebrow mb-2 flex items-center gap-2">
+                Must know <span className="h-px flex-1 bg-zinc-200 dark:bg-ink-800" />
               </div>
-            )}
-            {data.material.map((a) => (
-              <MaterialCard key={a.id} a={a} />
-            ))}
-          </div>
+              <div className="space-y-2">
+                {mustKnow.map((a) => (
+                  <button key={a.id} onClick={() => setDetail(a)} className="card w-full p-3.5 text-left active:opacity-90">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[13px] font-bold">
+                        {a.ticker}
+                        <span className="ml-2 rounded bg-accent/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-accent">
+                          {CAT_LABEL[a.category] || a.category}
+                        </span>
+                      </span>
+                      <span className="num text-[10px] text-zinc-500">{relTime(a.published_at)}</span>
+                    </div>
+                    <div className="mt-1 text-[12px] leading-snug text-zinc-600 dark:text-zinc-300">{a.headline}</div>
+                    <RenderBody a={a} />
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
 
-          <button
-            onClick={() => setRoutineOpen(!routineOpen)}
-            className="card mt-4 flex w-full items-center justify-between p-3 text-left text-xs"
-          >
-            <span>
-              <span className="font-semibold">Routine filings</span>{" "}
-              <span className="text-zinc-500">
-                ({Object.entries(data.routine_collapsed.by_category).map(([k, v]) => `${CAT_LABEL[k] || k} ×${v}`).join(", ") || "none"})
-              </span>
-            </span>
-            <span className="text-zinc-400">{routineOpen ? "−" : "+"}</span>
-          </button>
-          {routineOpen && (
-            <div className="mt-2 space-y-1.5">
-              {data.routine_collapsed.items.map((a) => (
-                <div key={a.id} className="card flex items-center justify-between px-3 py-2 text-[11px]">
-                  <span className="min-w-0 truncate text-zinc-600 dark:text-zinc-400">
-                    <b className="text-zinc-800 dark:text-zinc-200">{a.ticker}</b> · {a.headline}
-                  </span>
-                  <span className="num ml-2 shrink-0 text-zinc-500">{relTime(a.published_at)}</span>
-                </div>
-              ))}
+          {worthALook.length > 0 && (
+            <section>
+              <div className="eyebrow mb-2 flex items-center gap-2">
+                Worth a look <span className="h-px flex-1 bg-zinc-200 dark:bg-ink-800" />
+              </div>
+              <div className="card divide-y divide-zinc-200/60 dark:divide-ink-800/80">
+                {worthALook.map((a) => (
+                  <button key={a.id} onClick={() => setDetail(a)} className="flex w-full items-center gap-3 px-3.5 py-2.5 text-left active:bg-zinc-50 dark:active:bg-ink-800">
+                    <span className="num w-20 shrink-0 text-[12px] font-bold">{a.ticker}</span>
+                    <span className="chip shrink-0 px-1.5 py-0.5 text-[9px]">{CAT_LABEL[a.category] || a.category}</span>
+                    <span className="min-w-0 flex-1 truncate text-[12px] text-zinc-600 dark:text-zinc-300">{a.summary || a.headline}</span>
+                    <span className="num shrink-0 text-[10px] text-zinc-500">{relTime(a.published_at)}</span>
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {quiet && (
+            <div className="card p-4">
+              <p className="text-[13px] text-zinc-500">Widen the window to scan further back.</p>
             </div>
           )}
-        </>
+
+          {data.stats.routine > 0 && (
+            <section>
+              <button onClick={() => setRoutineOpen(!routineOpen)} className="card flex w-full items-center justify-between px-3.5 py-3 text-left">
+                <span className="text-[12px]">
+                  <span className="num font-bold">{data.stats.routine}</span>{" "}
+                  <span className="text-zinc-500">routine filings — buried where they belong</span>
+                </span>
+                <span className="text-zinc-400">{routineOpen ? "−" : "+"}</span>
+              </button>
+              {routineOpen && (
+                <div className="mt-2 space-y-1">
+                  {data.routine_collapsed.items.map((a) => (
+                    <button key={a.id} onClick={() => setDetail(a)} className="flex w-full items-center gap-3 px-3.5 py-2 text-left">
+                      <span className="num w-20 shrink-0 text-[11px] font-semibold text-zinc-500">{a.ticker}</span>
+                      <span className="min-w-0 flex-1 truncate text-[11px] text-zinc-500">{a.headline}</span>
+                      <span className="num shrink-0 text-[10px] text-zinc-600">{relTime(a.published_at)}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
+        </div>
       )}
+
+      <DetailSheet a={detail} onClose={() => setDetail(null)} />
     </main>
+  );
+}
+
+function ThemeButton() {
+  const [dark, setDark] = useState(true);
+  useEffect(() => {
+    setDark(document.documentElement.classList.contains("dark"));
+  }, []);
+  return (
+    <button
+      aria-label="Toggle theme"
+      onClick={() => {
+        const next = !dark;
+        setDark(next);
+        document.documentElement.classList.toggle("dark", next);
+        try {
+          localStorage.setItem("finn-theme", next ? "dark" : "light");
+        } catch {}
+      }}
+      className="chip px-2.5"
+    >
+      {dark ? "☾" : "☀"}
+    </button>
   );
 }

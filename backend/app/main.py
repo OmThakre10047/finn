@@ -151,6 +151,45 @@ def set_watch_types(body: dict) -> dict:
     return get_watch_types()
 
 
+@app.get("/api/bars/{ticker}")
+def bars(ticker: str, days: int = Query(30, ge=5, le=120)) -> dict:
+    with get_db() as conn:
+        rows = [dict(r) for r in conn.execute(
+            "SELECT date, close, volume FROM price_bars WHERE ticker = ? ORDER BY date DESC LIMIT ?", (ticker.upper(), days)
+        )]
+    rows.reverse()
+    avg20 = None
+    if len(rows) >= 21:
+        avg20 = round(sum(r["volume"] for r in rows[-21:-1]) / 20.0)
+    return {"ticker": ticker.upper(), "bars": rows, "avg20_volume": avg20}
+
+
+@app.get("/api/alerts/preview")
+def alerts_preview(volume_mult: float = Query(2.0, ge=0.1), price_move_pct: float = Query(4.0, ge=0.1)) -> dict:
+    """Would-have-fired count over the stored ~30 days, for the Radar rules editor."""
+    with get_db() as conn:
+        tickers = [r["ticker"] for r in conn.execute("SELECT DISTINCT ticker FROM price_bars")]
+    vol_fires, price_fires, examples = 0, 0, []
+    for t in tickers:
+        with get_db() as conn:
+            rows = [dict(r) for r in conn.execute(
+                "SELECT date, close, volume FROM price_bars WHERE ticker = ? ORDER BY date ASC", (t,)
+            )]
+        for i in range(20, len(rows)):
+            avg20 = sum(rows[j]["volume"] for j in range(i - 20, i)) / 20.0
+            if avg20 > 0 and rows[i]["volume"] >= volume_mult * avg20:
+                vol_fires += 1
+                if len(examples) < 6:
+                    examples.append({"ticker": t, "type": "volume", "date": rows[i]["date"], "ratio": round(rows[i]["volume"] / avg20, 2)})
+            if rows[i - 1]["close"] > 0:
+                move = 100.0 * (rows[i]["close"] - rows[i - 1]["close"]) / rows[i - 1]["close"]
+                if abs(move) >= price_move_pct:
+                    price_fires += 1
+                    if len(examples) < 6:
+                        examples.append({"ticker": t, "type": "price", "date": rows[i]["date"], "move_pct": round(move, 2)})
+    return {"volume_fires": vol_fires, "price_fires": price_fires, "total": vol_fires + price_fires, "examples": examples}
+
+
 @app.get("/api/alerts")
 def list_alerts(since_hours: int = Query(168, ge=1, le=24 * 30)) -> dict:
     cutoff = (datetime.utcnow() - timedelta(hours=since_hours)).isoformat(timespec="seconds")

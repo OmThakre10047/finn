@@ -22,6 +22,29 @@ export async function apiDelete<T>(path: string): Promise<T> {
   return r.json();
 }
 
+export function relTime(s: string | null): string {
+  if (!s) return "";
+  const d = new Date(s.replace(" ", "T") + (s.includes("Z") || s.includes("T") ? (s.includes("Z") ? "" : "Z") : ""));
+  const t = isNaN(d.getTime()) ? null : d;
+  if (!t) return s?.slice(0, 16) || "";
+  const mins = Math.max(0, Math.floor((Date.now() - t.getTime()) / 60000));
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const h = Math.floor(mins / 60);
+  if (h < 48) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
+
+export const CAT_LABEL: Record<string, string> = {
+  results: "Results", mna: "M&A", fund_raise: "Fund raise", management_change: "Mgmt change",
+  litigation: "Litigation", insider_trading: "Insider", earnings_call: "Concall", investor_meetings: "Investor meet",
+  credit_rating: "Rating", dividend: "Dividend", bonus_split: "Bonus/Split", capex: "Capex",
+  press_release: "Press release", postal_ballot: "Postal ballot", agm_egm: "AGM/EGM", pledging: "Pledging",
+  unclassified: "Other",
+};
+
+export const MUST_KNOW_CATS = new Set(["results", "management_change", "mna", "litigation", "fund_raise", "pledging", "insider_trading"]);
+
 export type Announcement = {
   id: number;
   ticker: string;
@@ -66,13 +89,27 @@ export type Alert = {
   id: number;
   ticker: string;
   type: "material" | "volume" | "price";
-  payload: Record<string, unknown>;
+  payload: Record<string, number | string>;
   severity: string;
   created_at: string;
 };
 
+export type Bars = {
+  ticker: string;
+  bars: { date: string; close: number; volume: number }[];
+  avg20_volume: number | null;
+};
+
+export type Preview = {
+  volume_fires: number;
+  price_fires: number;
+  total: number;
+  examples: { ticker: string; type: string; date: string; ratio?: number; move_pct?: number }[];
+};
+
 export type PromiseRow = {
   period_promised: string;
+  quarter_key?: string | null;
   promise: string;
   metric: string;
   target: string;

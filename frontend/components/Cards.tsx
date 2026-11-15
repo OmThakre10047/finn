@@ -1,69 +1,64 @@
 "use client";
 
-import type { ResultsCard as ResultsCardT, BioCard as BioCardT } from "@/lib/api";
+import type { Announcement, ResultsCard, BioCard } from "@/lib/api";
 
-export function ResultsCardView({ data }: { data: ResultsCardT }) {
+export function ResultsTable({ card }: { card: ResultsCard }) {
   return (
-    <div className="mt-3 rounded-lg border border-accent/30 bg-accent/5 p-3">
-      <div className="mb-2 flex items-center justify-between">
-        <span className="text-[11px] font-semibold uppercase tracking-wider text-accent">
-          Results · {data.period}
-        </span>
-        <span className="text-[10px] text-zinc-500">
-          {data.source_type === "scanned"
-            ? `from scanned page ${data.source?.page || "?"}`
-            : data.source?.page
-              ? `source: ${data.source.doc} p.${data.source.page}`
-              : ""}
-        </span>
+    <div className="mt-2">
+      <div className="num grid grid-cols-[1.4fr_1fr_0.9fr_0.9fr_0.5fr] gap-x-2 text-[11px] text-zinc-500">
+        <span>₹ {card.currency || "Cr"}</span>
+        <span className="text-right">This Q</span>
+        <span className="text-right">QoQ</span>
+        <span className="text-right">YoY</span>
+        <span className="text-right">p.</span>
       </div>
-      <table className="w-full text-left text-xs">
-        <thead className="text-zinc-500">
-          <tr>
-            <th className="py-1 font-medium">₹ {data.currency || "Cr"}</th>
-            <th className="py-1 text-right font-medium">This Q</th>
-            <th className="py-1 text-right font-medium">QoQ</th>
-            <th className="py-1 text-right font-medium">YoY</th>
-          </tr>
-        </thead>
-        <tbody className="num">
-          {data.rows?.map((r) => (
-            <tr key={r.label} className="border-t border-zinc-200/60 dark:border-ink-700/60">
-              <td className="py-1.5 font-medium">
-                {r.label}
-                {r.page ? <span className="ml-1 text-[9px] text-zinc-400">p.{r.page}</span> : null}
-              </td>
-              <td className="py-1.5 text-right">{r.current?.toLocaleString()}</td>
-              <td className={`py-1.5 text-right ${(r.qoq ?? 0) >= 0 ? "text-accent" : "text-rose-400"}`}>
-                {r.qoq == null ? "—" : `${r.qoq > 0 ? "+" : ""}${r.qoq}%`}
-              </td>
-              <td className={`py-1.5 text-right ${(r.yoy ?? 0) >= 0 ? "text-accent" : "text-rose-400"}`}>
-                {r.yoy == null ? "—" : `${r.yoy > 0 ? "+" : ""}${r.yoy}%`}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      {card.rows?.map((r) => (
+        <div key={r.label} className="num mt-1.5 grid grid-cols-[1.4fr_1fr_0.9fr_0.9fr_0.5fr] gap-x-2 text-[13px]">
+          <span className="font-semibold">{r.label}</span>
+          <span className="text-right">{r.current?.toLocaleString()}</span>
+          <span className={`text-right ${(r.qoq ?? 0) >= 0 ? "text-accent" : "text-rose-400"}`}>
+            {r.qoq == null ? "—" : `${r.qoq > 0 ? "+" : ""}${r.qoq}%`}
+          </span>
+          <span className={`text-right ${(r.yoy ?? 0) >= 0 ? "text-accent" : "text-rose-400"}`}>
+            {r.yoy == null ? "—" : `${r.yoy > 0 ? "+" : ""}${r.yoy}%`}
+          </span>
+          <span className="text-right text-zinc-500">{r.page ?? "—"}</span>
+        </div>
+      ))}
+      <div className="mt-2 text-[10px] text-zinc-500">
+        {card.source_type === "scanned" ? `from scanned page ${card.source?.page || "?"}` : `results filing, page ${card.source?.page || "—"}`}
+      </div>
     </div>
   );
 }
 
-export function BioCardView({ data }: { data: BioCardT }) {
+export function RenderBody({ a }: { a: Announcement }) {
+  const rc = a.renders?.results_card as ResultsCard | undefined;
+  const bio = a.renders?.bio as BioCard | undefined;
   return (
-    <div className="mt-3 rounded-lg border border-amber-400/30 bg-amber-400/5 p-3">
-      <div className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-amber-400">
-        Who&apos;s coming in
-      </div>
-      <div className="text-sm font-semibold">{data.person}</div>
-      <div className="mb-1.5 text-xs text-zinc-500">{data.role}</div>
-      <p className="text-xs leading-relaxed text-zinc-600 dark:text-zinc-300">{data.bio}</p>
-      {data.sources && data.sources.length > 0 && (
-        <div className="mt-1.5 flex flex-wrap gap-1">
-          {data.sources.slice(0, 3).map((u, i) => (
-            <a key={i} href={u} target="_blank" rel="noreferrer" className="chip text-[10px]">
-              source {i + 1} ↗
-            </a>
-          ))}
+    <div>
+      {a.summary && <p className="text-[13px] leading-relaxed text-zinc-600 dark:text-zinc-300">{a.summary}</p>}
+      {rc && rc.rows && (
+        <div className="mt-3 rounded-lg border border-accent/25 bg-accent/5 p-3">
+          <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-accent">Results · {rc.period}</div>
+          <ResultsTable card={rc} />
+        </div>
+      )}
+      {bio && bio.bio && (
+        <div className="mt-3 rounded-lg border border-amber-400/25 bg-amber-400/5 p-3">
+          <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-amber-400">Who&apos;s coming in</div>
+          <div className="mt-1 text-sm font-semibold">{bio.person}</div>
+          <div className="text-xs text-zinc-500">{bio.role}</div>
+          <p className="mt-1.5 text-xs leading-relaxed text-zinc-600 dark:text-zinc-300">{bio.bio}</p>
+          {bio.sources && bio.sources.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1">
+              {bio.sources.slice(0, 3).map((u, i) => (
+                <a key={i} href={u} target="_blank" rel="noreferrer" className="chip text-[10px]">
+                  source {i + 1} ↗
+                </a>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
