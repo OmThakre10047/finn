@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { apiGet, relTime, CAT_LABEL, MUST_KNOW_CATS, type Announcement, type Digest } from "@/lib/api";
 import { Sheet } from "@/components/ui";
 import { RenderBody } from "@/components/Cards";
+import { SnapshotBanner } from "@/components/WakeGate";
 
 const WINDOWS = [
   { label: "24h", hours: 24 },
@@ -71,6 +72,7 @@ export default function TodayPage() {
 
   return (
     <main className="mx-auto max-w-lg px-4 pt-5">
+      <SnapshotBanner />
       <div className="mb-4 flex items-start justify-between">
         <div>
           <h1 className="text-lg font-bold tracking-tight">

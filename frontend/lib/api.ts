@@ -1,7 +1,33 @@
 export const API = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
 
+let warm: Promise<boolean> | null = null;
+
+export function wakeBackend(timeoutMs = 55000): Promise<boolean> {
+  if (warm) return warm;
+  warm = (async () => {
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+      try {
+        const ctl = new AbortController();
+        const t = setTimeout(() => ctl.abort(), 4000);
+        const r = await fetch(`${API}/api/health`, { cache: "no-store", signal: ctl.signal });
+        clearTimeout(t);
+        if (r.ok) return true;
+      } catch {}
+      await new Promise((res) => setTimeout(res, 2500));
+    }
+    return false;
+  })();
+  return warm;
+}
+
 export async function apiGet<T>(path: string): Promise<T> {
   const r = await fetch(`${API}${path}`, { cache: "no-store" });
+  if (r.status === 502 || r.status === 503 || r.status === 0) {
+    const ok = await wakeBackend();
+    if (!ok) throw new Error("backend asleep — try again in a minute");
+    return apiGet<T>(path);
+  }
   if (!r.ok) throw new Error(`${r.status} ${path}`);
   return r.json();
 }

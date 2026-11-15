@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { TabBar } from "@/components/TabBar";
+import { WakeGate } from "@/components/WakeGate";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -28,8 +29,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <script dangerouslySetInnerHTML={{ __html: themeInit }} />
       </head>
       <body className="min-h-dvh pb-20">
-        {children}
-        <TabBar />
+        <WakeGate>
+          {children}
+          <TabBar />
+        </WakeGate>
       </body>
     </html>
   );
