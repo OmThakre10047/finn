@@ -7,7 +7,7 @@ FINN is triage, not a feed. The first screen answers "is there anything I must a
 
 | Today — triage | Radar — your thresholds | Research — Promise Tracker |
 |---|---|---|
-| ![Today](docs/screens/after2-today-wakegate-check.png) | ![Radar](docs/screens/after2-radar.png) | ![Research](docs/screens/after2-research.png) |
+| ![Today](docs/screens/today-live.png) | ![Radar](docs/screens/after2-radar.png) | ![Research](docs/screens/after2-research.png) |
 
 ## What it does
 
