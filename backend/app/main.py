@@ -74,10 +74,12 @@ def refresh(days_back: int = 3, enrich: bool = True) -> dict:
     ing = ingest(days_back)
     with get_db() as conn:
         s = dict(conn.execute("SELECT volume_mult, price_move_pct FROM alert_settings WHERE id = 1").fetchone())
+        watch = {r["key"]: bool(r["is_enabled"]) for r in conn.execute("SELECT key, is_enabled FROM watch_types")}
     mk = market.refresh_market(PORTFOLIO)
-    fired = market.run_market_rules(s["volume_mult"], s["price_move_pct"])
+    fired = market.backfill_market_alerts(s["volume_mult"], s["price_move_pct"])
+    mat = market.backfill_material_alerts(watch)
     enr = _enrich_all() if enrich else None
-    return {"ingest": ing, "market": mk, "alerts_fired": fired, "enrich": enr}
+    return {"ingest": ing, "market": mk, "alerts_fired": fired, "material_alerts": mat, "enrich": enr}
 
 
 @app.post("/api/research/{ticker}")
@@ -133,7 +135,11 @@ def set_alert_settings(body: dict) -> dict:
         for k, col in (("volume_mult", "volume_mult"), ("price_move_pct", "price_move_pct"), ("window_hours", "window_hours")):
             if k in body:
                 conn.execute(f"UPDATE alert_settings SET {col} = ? WHERE id = 1", (body[k],))
-        return dict(conn.execute("SELECT * FROM alert_settings WHERE id = 1").fetchone())
+        s = dict(conn.execute("SELECT * FROM alert_settings WHERE id = 1").fetchone())
+        watch = {r["key"]: bool(r["is_enabled"]) for r in conn.execute("SELECT key, is_enabled FROM watch_types")}
+    market.backfill_market_alerts(s["volume_mult"], s["price_move_pct"])
+    market.backfill_material_alerts(watch)
+    return s
 
 
 @app.get("/api/settings/watch-types")

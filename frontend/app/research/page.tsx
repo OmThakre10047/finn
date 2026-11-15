@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { apiGet, apiPost, type ResearchReport, type PromiseRow } from "@/lib/api";
 import { VerdictPill } from "@/components/ui";
 
@@ -16,10 +17,24 @@ const SECTION_LABEL: Record<string, string> = {
   narrative_vs_numbers: "Narrative vs numbers", guidance: "Guidance", bull_vs_bear: "Bull vs bear",
 };
 
+function credibility(rows: PromiseRow[]) {
+  const checkable = rows.filter((r) => r.verdict !== "unverifiable");
+  const delivered = checkable.filter((r) => r.verdict === "delivered").length;
+  const partial = checkable.filter((r) => r.verdict === "partial").length;
+  const missed = checkable.filter((r) => r.verdict === "missed").length;
+  const score = checkable.length ? Math.round((100 * (delivered + 0.5 * partial)) / checkable.length) : null;
+  return { checkable: checkable.length, delivered, partial, missed, score, total: rows.length };
+}
+
+function firstPage(page: string | number | undefined): number | null {
+  if (page == null) return null;
+  const m = String(page).match(/\d+/);
+  return m ? Number(m[0]) : null;
+}
+
 function PromiseTrackerHero({ rows, sourceUrl }: { rows: PromiseRow[]; sourceUrl: (doc: string) => string | null }) {
   if (!rows.length) return null;
-  const numeric = rows.filter((r) => r.verdict !== "unverifiable").length;
-  const score = Math.round((100 * numeric) / rows.length);
+  const c = credibility(rows);
   return (
     <div className="card mt-4 border-accent/40 p-4">
       <div className="flex items-start justify-between">
@@ -28,12 +43,17 @@ function PromiseTrackerHero({ rows, sourceUrl }: { rows: PromiseRow[]; sourceUrl
           <p className="text-[11px] text-zinc-500">What management said vs what happened</p>
         </div>
         <div className="text-right">
-          <div className="num text-xl font-bold text-accent">{score}%</div>
-          <div className="text-[9px] uppercase tracking-wide text-zinc-500">credibility</div>
+          {c.score != null ? (
+            <div className="num text-xl font-bold text-accent">{c.score}%</div>
+          ) : (
+            <div className="text-[11px] font-semibold text-zinc-500">Not enough checkable promises</div>
+          )}
+          {c.score != null && <div className="text-[9px] uppercase tracking-wide text-zinc-500">credibility</div>}
         </div>
       </div>
       <div className="num mt-1 text-[10px] text-zinc-500">
-        {numeric} of {rows.length} promises numerically checkable against filings
+        {c.checkable} of {c.total} checkable · {c.delivered} delivered · {c.missed} missed
+        {c.partial > 0 ? ` · ${c.partial} partial` : ""}
       </div>
       <div className="mt-3 space-y-2.5">
         {rows.map((r, i) => (
@@ -58,15 +78,17 @@ function PromiseTrackerHero({ rows, sourceUrl }: { rows: PromiseRow[]; sourceUrl
               </div>
             </div>
             <div className="num mt-2 flex flex-wrap gap-1">
-              {(r.citations || []).map((c, j) => {
-                const url = sourceUrl(c.doc);
-                return url ? (
-                  <a key={j} href={url} target="_blank" rel="noreferrer" className="rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] text-zinc-500 underline decoration-zinc-400/40 dark:bg-ink-800">
-                    {c.doc} · p.{c.page} ↗
+              {(r.citations || []).map((cit, j) => {
+                const url = sourceUrl(cit.doc);
+                const pg = firstPage(cit.page);
+                const href = url ? `${url}#page=${pg ?? 1}` : null;
+                return href ? (
+                  <a key={j} href={href} target="_blank" rel="noreferrer" className="rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] text-zinc-500 underline decoration-zinc-400/40 dark:bg-ink-800">
+                    {cit.doc} · p.{cit.page} ↗
                   </a>
                 ) : (
                   <span key={j} className="rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] text-zinc-500 dark:bg-ink-800">
-                    {c.doc} · p.{c.page}
+                    {cit.doc} · p.{cit.page}
                   </span>
                 );
               })}
@@ -78,12 +100,22 @@ function PromiseTrackerHero({ rows, sourceUrl }: { rows: PromiseRow[]; sourceUrl
   );
 }
 
-export default function ResearchPage() {
+function ResearchInner() {
+  const searchParams = useSearchParams();
   const [ticker, setTicker] = useState("");
+  const deepLink = searchParams.get("t");
   const [report, setReport] = useState<ResearchReport | null>(null);
   const [status, setStatus] = useState("");
   const [stage, setStage] = useState(0);
   const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (deepLink && deepLink !== ticker) {
+      setTicker(deepLink.toUpperCase());
+      load(deepLink.toUpperCase());
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deepLink]);
 
   async function load(t: string) {
     setErr(null);
@@ -110,8 +142,9 @@ export default function ResearchPage() {
 
   const sourceUrl = (doc: string) => {
     if (!report) return null;
-    const dl = doc.toLowerCase();
-    const hit = report.sources.find((s) => dl.includes(s.kind.toLowerCase()) || dl.includes(s.period.toLowerCase()));
+    const norm = (s: string) => s.toLowerCase().replace(/\s+/g, " ").trim();
+    const target = norm(doc);
+    const hit = report.sources.find((s) => norm(`${s.kind} ${s.period}`) === target || norm(s.period) === target);
     return hit?.url || null;
   };
 
@@ -193,8 +226,10 @@ export default function ResearchPage() {
                     <div className="num mt-2 flex flex-wrap gap-1">
                       {(sec.citations ?? []).slice(0, 5).map((c, j) => {
                         const url = sourceUrl(c.doc);
-                        return url ? (
-                          <a key={j} href={url} target="_blank" rel="noreferrer" className="rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] text-zinc-500 underline decoration-zinc-400/40 dark:bg-ink-800">
+                        const pg = firstPage(c.page);
+                        const href = url ? `${url}#page=${pg ?? 1}` : null;
+                        return href ? (
+                          <a key={j} href={href} target="_blank" rel="noreferrer" className="rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] text-zinc-500 underline decoration-zinc-400/40 dark:bg-ink-800">
                             {c.doc} · p.{c.page} ↗
                           </a>
                         ) : (
@@ -227,4 +262,10 @@ export default function ResearchPage() {
 
     </main>
   );
+}
+
+export default function ResearchPage() {
+  return (<Suspense fallback={<main className="mx-auto max-w-lg px-4 pt-5" />}>
+    <ResearchInner />
+  </Suspense>);
 }

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { apiGet, apiPost, relTime, CAT_LABEL, type Alert, type Bars, type Preview } from "@/lib/api";
 import { Sparkline, VolumeBars, Sheet } from "@/components/ui";
+import { AlertSheetBody } from "@/components/AlertSheetBody";
 
 function AlertCard({ a, onOpen }: { a: Alert; onOpen: () => void }) {
   const [bars, setBars] = useState<Bars | null>(null);
@@ -192,13 +193,8 @@ export default function RadarPage() {
         </div>
       </section>
 
-      <Sheet open={!!detail} onClose={() => setDetail(null)} title={detail ? `${detail.ticker} · ${detail.type}` : ""}>
-        {detail && (
-          <div>
-            <p className="num text-[13px]">{JSON.stringify(detail.payload)}</p>
-            <p className="mt-2 text-[11px] text-zinc-500">fired {relTime(detail.created_at)} · severity {detail.severity}</p>
-          </div>
-        )}
+      <Sheet open={!!detail} onClose={() => setDetail(null)} title={detail ? `${detail.ticker} · ${detail.type === "price" ? "price move" : detail.type}` : ""}>
+        {detail && <AlertSheetBody a={detail} />}
       </Sheet>
     </main>
   );

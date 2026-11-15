@@ -63,6 +63,7 @@ CREATE TABLE IF NOT EXISTS alerts (
     type TEXT NOT NULL,
     payload_json TEXT NOT NULL,
     severity TEXT DEFAULT 'info',
+    dedupe_key TEXT UNIQUE,
     created_at TEXT DEFAULT (datetime('now'))
 );
 CREATE TABLE IF NOT EXISTS filings (
@@ -142,6 +143,11 @@ def get_db():
 def init_db() -> None:
     with get_db() as db:
         db.executescript(SCHEMA)
+        try:
+            db.execute("ALTER TABLE alerts ADD COLUMN dedupe_key TEXT")
+        except sqlite3.OperationalError:
+            pass
+        db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_alerts_dedupe ON alerts(dedupe_key) WHERE dedupe_key IS NOT NULL")
 
 
 def get_source_state(source: str):

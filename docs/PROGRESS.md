@@ -1,5 +1,14 @@
 # PROGRESS
 
+## 2026-11-15 — Review-3 fixes 1-5: credibility math, page-anchored citations, alert backfill, human alert sheets, quiet-state recall
+- **Fix 1**: credibility = (delivered + 0.5×partial) / checkable; unverifiable excluded and counted separately ("0 of 3 checkable · 0 delivered · 0 missed"); 0 checkable → "Not enough checkable promises" (no fake %) — verified on KPITTECH (3 unverifiable H2/Q4 promises).
+- **Fix 2**: citation links match source by EXACT doc label (`kind + period`, normalised) — never kind alone; link carries `#page=N` (first int of the citation's page string) so the PDF opens on the cited page.
+- **Fix 3**: `backfill_market_alerts()` applies rules over ALL stored bars (rolling 20-day avg, deduped by `ticker|type|date` via new `alerts.dedupe_key` unique column + index, auto-migrated in `init_db`); `backfill_material_alerts()` generates material alerts from the 30-day digest for watched categories. Rules save + `/api/refresh` both re-run backfills → Fired list always reflects current thresholds. Live: 40 bar alerts (2×/±4%) + 28 material = 68 in DB.
+- **Fix 4**: alert detail sheet = human sentence ("ADANIENT closed +5.17% at ₹2607.9 on 10/29, beyond your ±4% rule.") + sparkline/volume chart + **Research {ticker} →** deep-link (`/research?t=` with Suspense-wrapped auto-load).
+- **Fix 5**: Today quiet state keeps 24h default but shows "Last things that mattered" (top-3 must-know from 7 days) + one-tap "See 7 days →".
+- **Snapshot**: now commits 35 days of announcements (97), renders (39), alerts (68) + 6 research reports; `restore_if_empty()` restores all four → deployed app looks identical to local even if NSE blocks cloud IPs.
+- Screens: `after2-radar(.png/-full)`, `after2-alert-sheet.png`, `after2-research(.png/-full)`.
+
 ## 2026-11-15 — Frontend rebuilt around the triage POV (Today / Radar / Research)
 - **Process**: Playwright before-screenshots at 390×844 → senior-designer critique (5 problems: stats-dashboard opening, dead quiet default, disconnected rules, invisible star feature, slack density) → rebuilt per screen, commit each.
 - **Today (`/`)**: verdict headline ("All quiet." / "N things need your attention, M more to scan."), buried-count subline, window chips + inline custom hours, MUST KNOW (top-8 by priority w/ results tables incl. per-row page refs + QoQ/YoY colouring, bio cards w/ source chips), WORTH A LOOK compact rows, ROUTINE collapsed, tap → iOS-style bottom sheet (full subject + renders + filing PDF link).

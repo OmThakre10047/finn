@@ -49,6 +49,17 @@ export default function TodayPage() {
       .catch((e) => setErr(String(e.message || e)));
   }, [hours]);
 
+  const [recent, setRecent] = useState<Digest | null>(null);
+  useEffect(() => {
+    if (data && data.stats.total === 0 && hours === 24) {
+      apiGet<Digest>("/api/digest?window_hours=168")
+        .then((d) => setRecent(d.stats.total > 0 ? d : null))
+        .catch(() => setRecent(null));
+    } else {
+      setRecent(null);
+    }
+  }, [data, hours]);
+
   const { mustKnow, worthALook } = useMemo(() => {
     const mkAll = (data?.material || []).filter((a) => MUST_KNOW_CATS.has(a.category) || a.watched);
     const mk = mkAll.slice(0, 8);
@@ -188,7 +199,34 @@ export default function TodayPage() {
             </section>
           )}
 
-          {quiet && (
+          {quiet && recent && recent.material.length > 0 && (
+            <section>
+              <div className="eyebrow mb-2 flex items-center gap-2">
+                Last things that mattered <span className="h-px flex-1 bg-zinc-200 dark:bg-ink-800" />
+              </div>
+              <div className="space-y-2">
+                {recent.material.slice(0, 3).map((a) => (
+                  <button key={a.id} onClick={() => setDetail(a)} className="card w-full p-3.5 text-left active:opacity-90">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[13px] font-bold">
+                        {a.ticker}
+                        <span className="ml-2 rounded bg-zinc-200 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-zinc-600 dark:bg-ink-800 dark:text-zinc-400">
+                          {CAT_LABEL[a.category] || a.category}
+                        </span>
+                      </span>
+                      <span className="num text-[10px] text-zinc-500">{relTime(a.published_at)}</span>
+                    </div>
+                    <div className="mt-1 text-[12px] leading-snug text-zinc-600 dark:text-zinc-300">{a.summary || a.headline}</div>
+                  </button>
+                ))}
+              </div>
+              <button onClick={() => setHours(168)} className="mt-2 w-full text-center text-[12px] font-semibold text-accent">
+                See 7 days →
+              </button>
+            </section>
+          )}
+
+          {quiet && !recent && (
             <div className="card p-4">
               <p className="text-[13px] text-zinc-500">Widen the window to scan further back.</p>
             </div>

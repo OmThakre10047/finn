@@ -43,40 +43,69 @@ def store_bars(bars: dict) -> int:
 
 
 def run_market_rules(volume_mult: float, price_move_pct: float) -> list[dict]:
-    alerts = []
+    return backfill_market_alerts(volume_mult, price_move_pct, latest_only=True)
+
+
+def backfill_market_alerts(volume_mult: float, price_move_pct: float, latest_only: bool = False) -> list[dict]:
+    """Apply rules over stored bars. latest_only: just the most recent bar; else all stored days (~30d)."""
+    fired = []
     with get_db() as conn:
         tickers = [r["ticker"] for r in conn.execute("SELECT DISTINCT ticker FROM price_bars")]
         for t in tickers:
-            rows = conn.execute(
-                "SELECT date, close, volume FROM price_bars WHERE ticker = ? ORDER BY date DESC LIMIT 21", (t,)
-            ).fetchall()
-            if len(rows) < 21:
-                continue
-            latest = rows[0]
-            prev = rows[1]
-            avg20 = sum(r["volume"] for r in rows[1:21]) / 20.0
-            if avg20 > 0 and latest["volume"] >= volume_mult * avg20:
-                alerts.append({
-                    "ticker": t, "type": "volume", "severity": "warning",
-                    "payload": {"date": latest["date"], "volume": latest["volume"], "avg20": round(avg20), "ratio": round(latest["volume"] / avg20, 2)},
-                })
-            if prev["close"] > 0:
-                move = 100.0 * (latest["close"] - prev["close"]) / prev["close"]
-                if abs(move) >= price_move_pct:
-                    alerts.append({
-                        "ticker": t, "type": "price", "severity": "warning" if abs(move) < 2 * price_move_pct else "critical",
-                        "payload": {"date": latest["date"], "move_pct": round(move, 2), "close": latest["close"], "prev_close": prev["close"]},
+            rows = [dict(r) for r in conn.execute(
+                "SELECT date, close, volume FROM price_bars WHERE ticker = ? ORDER BY date ASC", (t,)
+            )]
+            if latest_only:
+                rows = rows[-21:]
+            for i in range(20, len(rows)):
+                latest = rows[i]
+                prev = rows[i - 1]
+                avg20 = sum(rows[j]["volume"] for j in range(i - 20, i)) / 20.0
+                if avg20 > 0 and latest["volume"] >= volume_mult * avg20:
+                    fired.append({
+                        "ticker": t, "type": "volume", "severity": "warning",
+                        "payload": {"date": latest["date"], "volume": latest["volume"], "avg20": round(avg20), "ratio": round(latest["volume"] / avg20, 2)},
                     })
-        for a in alerts:
+                if prev["close"] > 0:
+                    move = 100.0 * (latest["close"] - prev["close"]) / prev["close"]
+                    if abs(move) >= price_move_pct:
+                        fired.append({
+                            "ticker": t, "type": "price",
+                            "severity": "warning" if abs(move) < 2 * price_move_pct else "critical",
+                            "payload": {"date": latest["date"], "move_pct": round(move, 2), "close": latest["close"], "prev_close": prev["close"]},
+                        })
+        for a in fired:
+            key = f"{a['ticker']}|{a['type']}|{a['payload']['date']}"
             conn.execute(
-                """INSERT INTO alerts (ticker, type, payload_json, severity)
-                   SELECT ?, ?, ?, ?
-                   WHERE NOT EXISTS (
-                     SELECT 1 FROM alerts WHERE ticker = ? AND type = ? AND payload_json = ?
-                   )""",
-                (a["ticker"], a["type"], json.dumps(a["payload"]), a["severity"], a["ticker"], a["type"], json.dumps(a["payload"])),
+                "INSERT OR IGNORE INTO alerts (ticker, type, payload_json, severity, dedupe_key) VALUES (?, ?, ?, ?, ?)",
+                (a["ticker"], a["type"], json.dumps(a["payload"]), a["severity"], key),
             )
-    return alerts
+    return fired
+
+
+def backfill_material_alerts(watch_types: dict[str, bool], days: int = 30) -> int:
+    """Material-announcement alerts for watched categories from the digest window."""
+    n = 0
+    with get_db() as conn:
+        rows = conn.execute(
+            """SELECT ticker, category, headline, subject, summary, published_at FROM announcements
+               WHERE materiality = 'material' AND published_at >= datetime('now', ?)""",
+            (f"-{days} days",),
+        ).fetchall()
+        for r in rows:
+            if not watch_types.get(r["category"]):
+                continue
+            key = f"{r['ticker']}|material|{(r['published_at'] or '')[:10]}|{(r['headline'] or '')[:40]}"
+            cur = conn.execute(
+                """INSERT OR IGNORE INTO alerts (ticker, type, payload_json, severity, dedupe_key)
+                   VALUES (?, 'material', ?, 'info', ?)""",
+                (r["ticker"], json.dumps({
+                    "category": r["category"], "headline": r["headline"], "summary": r["summary"],
+                    "date": (r["published_at"] or "")[:10],
+                }), key),
+            )
+            n += cur.rowcount
+    return n
 
 
 def refresh_market(tickers: list[str]) -> dict:
