@@ -246,7 +246,9 @@ function ResearchInner() {
             <div className={stage >= 2 ? "text-accent" : ""}>{stage >= 2 ? "●" : "○"} extracting facts & promises, page by page</div>
             <div className={stage >= 3 ? "text-accent" : ""}>{stage >= 3 ? "●" : "○"} synthesising the dossier</div>
           </div>
-          <p className="mt-2 text-[10px] text-zinc-500">This reads ~5 primary documents. Takes 2–3 minutes on free tiers.</p>
+          <p className="mt-2 text-[10px] text-zinc-500">
+            Live research for uncached tickers may take several minutes on the free tier — try one of the demo chips for an instant cached report.
+          </p>
         </div>
       )}
       {err && (

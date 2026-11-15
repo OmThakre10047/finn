@@ -1,5 +1,15 @@
 # PROGRESS
 
+## 2026-11-15 — Deployed: Render + Vercel live; research crash fixed; SUPREMEIND cloud test; final docs
+- **Live**: frontend https://finn-umber.vercel.app · backend https://finn-api-brw2.onrender.com · repo https://github.com/OmThakre10047/finn (public, secrets audited: 0 tracked).
+- **Render build fixes** (3 failed builds → clean-clone reproduce loop per user): (1) commands ran from repo root but requirements.txt lives in backend/ → `cd backend` in build+start; (2) `pypdfium2>=0.19,<1` pin fabricated (0.x ends 0.15.0) → `>=4,<6`; (3) clean-clone test caught `restore_if_empty()` dropping classification fields → fresh deploys had 0 material items — fixed, now verified: digest 30d = 232 total / 74 material / 71.1% rules.
+- **Research crash (ETERNAL)**: strong model returned `guidance.text` as a list of promise objects → `.split()` crash. Fixed with StructuredText (renders strings/arrays/objects), SectionErrorBoundary per section + tracker, coerced citations. All 6 cached reports verified on the LIVE API + Vercel: 0 crashes, 0 JS errors, 8 sections each.
+- **Cloud reachability**: POST /api/refresh on Render → **NSE live** (get-dates, 2,868 rows), yfinance live (17/18), 37 alerts backfilled. Snapshot fallback armed but not needed.
+- **SUPREMEIND live research from cloud**: done in ~165s, 8 sections + 10 tracker rows, no restart/OOM. Uncached-ticker expectation line added to the UI progress state.
+- **Fixes**: ISO published_at normalisation (ingest + migration, 232/232) — snapshot now matches DB exactly (232); rules/watch-type saves wipe stale volume/price + unwatched-material alerts before backfill (2× → 27 volume alerts, 4× → 6, verified). Dedupe already handled the TATAPOWER double card.
+- **Final docs**: README (live links + cold-start note, screenshots, architecture, real cost table: 100 calls, 84% flash-lite, 644k in/67k out, 22% cache; 3-command local run), DECISIONS.md (trade-offs/omissions/next), COVER_EMAIL.md (336 words).
+- Submission checklist complete except: covering email send + git identity fix before final push is done (identity set to Om Thakre).
+
 ## 2026-11-15 — Review-3 fixes 1-5: credibility math, page-anchored citations, alert backfill, human alert sheets, quiet-state recall
 - **Fix 1**: credibility = (delivered + 0.5×partial) / checkable; unverifiable excluded and counted separately ("0 of 3 checkable · 0 delivered · 0 missed"); 0 checkable → "Not enough checkable promises" (no fake %) — verified on KPITTECH (3 unverifiable H2/Q4 promises).
 - **Fix 2**: citation links match source by EXACT doc label (`kind + period`, normalised) — never kind alone; link carries `#page=N` (first int of the citation's page string) so the PDF opens on the cited page.
