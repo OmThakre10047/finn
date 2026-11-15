@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { apiGet, apiPost, type ResearchReport } from "@/lib/api";
+import { apiGet, apiPost, type ResearchReport, type PromiseRow } from "@/lib/api";
+import { VerdictPill } from "@/components/ui";
 
-const DEMO = ["ETERNAL", "DMART", "KPITTECH", "CDSL", "VARUNBEV"];
+const DEMO = ["IRCTC", "ETERNAL", "DMART", "KPITTECH", "CDSL", "VARUNBEV"];
 
 const SECTION_ORDER = [
   "business_snapshot", "financial_snapshot", "trajectory", "balance_sheet",
@@ -15,38 +16,61 @@ const SECTION_LABEL: Record<string, string> = {
   narrative_vs_numbers: "Narrative vs numbers", guidance: "Guidance", bull_vs_bear: "Bull vs bear",
 };
 
-function PromiseTracker({ rows }: { rows: ResearchReport["promise_tracker"]["rows"] }) {
-  if (!rows?.length) return null;
-  const color = (v: string) =>
-    v === "delivered" ? "text-accent" : v === "missed" ? "text-rose-400" : v === "partial" ? "text-amber-400" : "text-zinc-500";
+function PromiseTrackerHero({ rows, sourceUrl }: { rows: PromiseRow[]; sourceUrl: (doc: string) => string | null }) {
+  if (!rows.length) return null;
+  const numeric = rows.filter((r) => r.verdict !== "unverifiable").length;
+  const score = Math.round((100 * numeric) / rows.length);
   return (
-    <div className="card mt-3 border-accent/40 p-3.5">
-      <div className="mb-2 flex items-center justify-between">
-        <h3 className="text-sm font-bold">Promise Tracker</h3>
-        <span className="text-[10px] text-zinc-500">promised vs delivered · last 4–5 quarters</span>
+    <div className="card mt-4 border-accent/40 p-4">
+      <div className="flex items-start justify-between">
+        <div>
+          <h3 className="text-[15px] font-bold">Promise Tracker</h3>
+          <p className="text-[11px] text-zinc-500">What management said vs what happened</p>
+        </div>
+        <div className="text-right">
+          <div className="num text-xl font-bold text-accent">{score}%</div>
+          <div className="text-[9px] uppercase tracking-wide text-zinc-500">credibility</div>
+        </div>
       </div>
-      <div className="space-y-2.5">
+      <div className="num mt-1 text-[10px] text-zinc-500">
+        {numeric} of {rows.length} promises numerically checkable against filings
+      </div>
+      <div className="mt-3 space-y-2.5">
         {rows.map((r, i) => (
-          <div key={i} className="rounded-lg border border-zinc-200/70 p-2.5 dark:border-ink-700/70">
+          <div key={i} className="rounded-lg border border-zinc-200/70 p-3 dark:border-ink-700/70">
             <div className="flex items-center justify-between">
               <span className="num text-[11px] font-semibold">{r.period_promised}</span>
-              <span className={`text-[10px] font-bold uppercase tracking-wide ${color(r.verdict)}`}>{r.verdict}</span>
+              <VerdictPill v={r.verdict} />
             </div>
-            <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-300">
-              <b>Promise:</b> {r.promise}
+            <p className="mt-1.5 border-l-2 border-zinc-300 pl-2 text-[12px] italic leading-snug text-zinc-600 dark:border-ink-700 dark:text-zinc-300">
+              “{r.promise}”
             </p>
-            <p className="mt-0.5 text-xs text-zinc-600 dark:text-zinc-300">
-              <b>Delivered:</b> {r.delivered}
-            </p>
-            {(r.citations?.length ?? 0) > 0 && (
-              <div className="num mt-1.5 flex flex-wrap gap-1">
-                {r.citations.map((c, j) => (
-                  <span key={j} className="rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] text-zinc-500 dark:bg-ink-800">
-                    {c.doc} · {c.period}{c.page ? ` · p.${c.page}` : ""}
-                  </span>
-                ))}
+            <div className="num mt-2 grid grid-cols-2 gap-2 text-[11px]">
+              <div>
+                <div className="text-[9px] uppercase tracking-wide text-zinc-500">target</div>
+                <div>{r.target || "—"}</div>
               </div>
-            )}
+              <div>
+                <div className="text-[9px] uppercase tracking-wide text-zinc-500">delivered</div>
+                <div className={(r.verdict === "missed" ? "text-rose-400" : r.verdict === "delivered" ? "text-accent" : "") || ""}>
+                  {r.delivered || "—"}
+                </div>
+              </div>
+            </div>
+            <div className="num mt-2 flex flex-wrap gap-1">
+              {(r.citations || []).map((c, j) => {
+                const url = sourceUrl(c.doc);
+                return url ? (
+                  <a key={j} href={url} target="_blank" rel="noreferrer" className="rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] text-zinc-500 underline decoration-zinc-400/40 dark:bg-ink-800">
+                    {c.doc} · p.{c.page} ↗
+                  </a>
+                ) : (
+                  <span key={j} className="rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] text-zinc-500 dark:bg-ink-800">
+                    {c.doc} · p.{c.page}
+                  </span>
+                );
+              })}
+            </div>
           </div>
         ))}
       </div>
@@ -57,35 +81,45 @@ function PromiseTracker({ rows }: { rows: ResearchReport["promise_tracker"]["row
 export default function ResearchPage() {
   const [ticker, setTicker] = useState("");
   const [report, setReport] = useState<ResearchReport | null>(null);
-  const [status, setStatus] = useState<string>("");
+  const [status, setStatus] = useState("");
+  const [stage, setStage] = useState(0);
   const [err, setErr] = useState<string | null>(null);
 
   async function load(t: string) {
     setErr(null);
     setReport(null);
-    setStatus("Fetching primary sources…");
+    setStatus("Starting…");
+    setStage(0);
     try {
       let d = await apiPost<{ status: string; report?: ResearchReport; error?: string }>(`/api/research/${t.toUpperCase()}`);
       let tries = 0;
-      while (d.status === "pending" && tries < 60) {
+      while (d.status === "pending" && tries < 80) {
         await new Promise((r) => setTimeout(r, 3000));
-        setStatus(tries % 2 ? "Reading transcripts…" : "Extracting promises & numbers…");
+        setStage(1 + (tries % 3));
         d = await apiGet<{ status: string; report?: ResearchReport; error?: string }>(`/api/research/${t.toUpperCase()}`);
         tries++;
       }
       if (d.status === "done" && d.report) setReport(d.report);
       else if (d.status === "error") setErr(d.error || "Report generation failed.");
-      else setStatus("Still working… try again shortly.");
+      else setStatus("Still working — check back in a minute.");
     } catch (e) {
       setErr(String((e as Error).message));
     }
     setStatus("");
   }
 
+  const sourceUrl = (doc: string) => {
+    if (!report) return null;
+    const dl = doc.toLowerCase();
+    const hit = report.sources.find((s) => dl.includes(s.kind.toLowerCase()) || dl.includes(s.period.toLowerCase()));
+    return hit?.url || null;
+  };
+
   return (
-    <main className="mx-auto max-w-lg px-4 pt-6">
-      <h1 className="mb-1 text-xl font-bold tracking-tight">Research</h1>
-      <p className="mb-4 text-[11px] text-zinc-500">Any NSE ticker · grounded only in annual reports + concall transcripts via screener.in.</p>
+    <main className="mx-auto max-w-lg px-4 pt-5 pb-4">
+      <h1 className="text-lg font-bold tracking-tight">Research</h1>
+      <p className="mb-4 text-[11px] text-zinc-500">Any NSE ticker · annual reports + concall transcripts only · zero news.</p>
+
       <form
         className="flex gap-2"
         onSubmit={(e) => {
@@ -93,15 +127,9 @@ export default function ResearchPage() {
           if (ticker.trim()) load(ticker.trim());
         }}
       >
-        <input
-          className="input uppercase"
-          placeholder="e.g. IRCTC"
-          value={ticker}
-          onChange={(e) => setTicker(e.target.value)}
-        />
-        <button className="btn-primary shrink-0" type="submit">
-          Dig
-        </button>
+        <input className="input num uppercase" placeholder="Any NSE symbol, e.g. IRCTC" value={ticker}
+          onChange={(e) => setTicker(e.target.value)} />
+        <button className="btn-primary shrink-0 px-5" type="submit">Dig</button>
       </form>
       <div className="mt-2 flex flex-wrap gap-1.5">
         {DEMO.map((t) => (
@@ -111,59 +139,92 @@ export default function ResearchPage() {
         ))}
       </div>
 
-      {status && <div className="card mt-4 animate-pulse p-4 text-sm text-zinc-500">{status}</div>}
+      {status && (
+        <div className="card mt-4 p-4">
+          <div className="text-[13px] font-semibold">{status}</div>
+          <div className="num mt-2 space-y-1 text-[11px] text-zinc-500">
+            <div className={stage >= 0 ? "text-accent" : ""}>{stage >= 0 ? "●" : "○"} resolving screener documents</div>
+            <div className={stage >= 1 ? "text-accent" : ""}>{stage >= 1 ? "●" : "○"} downloading the annual report + last 4 concalls</div>
+            <div className={stage >= 2 ? "text-accent" : ""}>{stage >= 2 ? "●" : "○"} extracting facts & promises, page by page</div>
+            <div className={stage >= 3 ? "text-accent" : ""}>{stage >= 3 ? "●" : "○"} synthesising the dossier</div>
+          </div>
+          <p className="mt-2 text-[10px] text-zinc-500">This reads ~5 primary documents. Takes 2–3 minutes on free tiers.</p>
+        </div>
+      )}
       {err && (
         <div className="card mt-4 p-4">
           <div className="text-sm font-semibold text-rose-400">Research failed</div>
           <p className="num mt-1 break-words text-xs text-zinc-500">{err}</p>
-          <button className="btn-primary mt-3" onClick={() => load(ticker.trim().toUpperCase())}>
-            Retry
-          </button>
+          <button className="btn-primary mt-3" onClick={() => load(ticker.trim().toUpperCase())}>Retry</button>
         </div>
       )}
 
       {report && (
         <div className="mt-5">
-          <div className="mb-1 flex items-baseline justify-between">
-            <h2 className="text-lg font-bold">{report.name || report.ticker}</h2>
-            <span className="num text-[10px] text-zinc-500">built {report.generated_at?.slice(0, 16).replace("T", " ")}</span>
+          <div className="flex items-baseline justify-between">
+            <h2 className="text-[17px] font-bold">{report.name || report.ticker}</h2>
+            <span className="num text-[10px] text-zinc-500">{report.ticker}</span>
           </div>
-          <div className="mb-3 flex flex-wrap gap-1">
-            {report.sources?.map((s, i) => (
-              <a key={i} href={s.url} target="_blank" rel="noreferrer" className="chip">
-                {s.kind} {s.period}
-              </a>
-            ))}
-          </div>
-          {SECTION_ORDER.filter((k) => report.sections?.[k]).map((k) => {
-            const sec = report.sections[k];
-            return (
-              <div key={k} className="card mb-3 p-3.5">
-                <h3 className="mb-2 text-sm font-bold">{SECTION_LABEL[k] || k}</h3>
-                <div className="section-prose text-xs text-zinc-600 dark:text-zinc-300">
-                  {sec.text.split("\n").map((line, i) =>
-                    line.trim().startsWith("- ") || line.trim().startsWith("• ") ? (
-                      <li key={i} className="ml-4 list-disc">{line.replace(/^[-•] /, "")}</li>
-                    ) : line.trim() ? (
-                      <p key={i}>{line}</p>
-                    ) : null
-                  )}
-                </div>
-                {(sec.citations?.length ?? 0) > 0 && (
-                  <div className="num mt-2 flex flex-wrap gap-1">
-                    {(sec.citations ?? []).slice(0, 6).map((c, j) => (
-                      <span key={j} className="rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] text-zinc-500 dark:bg-ink-800">
-                        {c.doc} · {c.period}{c.page ? ` · p.${c.page}` : ""}
-                      </span>
-                    ))}
+
+          <PromiseTrackerHero rows={report.promise_tracker?.rows || []} sourceUrl={sourceUrl} />
+
+          <div className="mt-4 space-y-2">
+            {SECTION_ORDER.filter((k) => report.sections?.[k]).map((k, i) => {
+              const sec = report.sections[k];
+              return (
+                <details key={k} className="card p-3.5" open={i < 1}>
+                  <summary className="flex cursor-pointer list-none items-center justify-between">
+                    <span className="text-[13px] font-bold">
+                      <span className="num mr-2 text-zinc-500">{String(i + 1).padStart(2, "0")}</span>
+                      {SECTION_LABEL[k] || k}
+                    </span>
+                    <span className="text-zinc-400 text-xs">{i < 1 ? "−" : "+"}</span>
+                  </summary>
+                  <div className="section-prose mt-2 text-[12px] text-zinc-600 dark:text-zinc-300">
+                    {sec.text.split("\n").map((line, j) =>
+                      line.trim().startsWith("- ") || line.trim().startsWith("• ") ? (
+                        <li key={j} className="ml-4 list-disc">{line.replace(/^[-•] /, "")}</li>
+                      ) : line.trim() ? (
+                        <p key={j}>{line}</p>
+                      ) : null
+                    )}
                   </div>
-                )}
-              </div>
-            );
-          })}
-          {report.promise_tracker && <PromiseTracker rows={report.promise_tracker.rows} />}
+                  {(sec.citations?.length ?? 0) > 0 && (
+                    <div className="num mt-2 flex flex-wrap gap-1">
+                      {(sec.citations ?? []).slice(0, 5).map((c, j) => {
+                        const url = sourceUrl(c.doc);
+                        return url ? (
+                          <a key={j} href={url} target="_blank" rel="noreferrer" className="rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] text-zinc-500 underline decoration-zinc-400/40 dark:bg-ink-800">
+                            {c.doc} · p.{c.page} ↗
+                          </a>
+                        ) : (
+                          <span key={j} className="rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] text-zinc-500 dark:bg-ink-800">
+                            {c.doc} · p.{c.page}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  )}
+                </details>
+              );
+            })}
+          </div>
+
+          <div className="mt-4 rounded-lg border border-zinc-200 px-3 py-2.5 text-center dark:border-ink-700">
+            <span className="num text-[11px] text-zinc-500">
+              Built from {report.sources?.length || 0} primary documents · 0 news · ₹0
+            </span>
+            <div className="mt-1.5 flex flex-wrap justify-center gap-1">
+              {report.sources?.map((s, i) => (
+                <a key={i} href={s.url} target="_blank" rel="noreferrer" className="chip text-[9px]">
+                  {s.kind} {s.period} ↗
+                </a>
+              ))}
+            </div>
+          </div>
         </div>
       )}
+
     </main>
   );
 }
